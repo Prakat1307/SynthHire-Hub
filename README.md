@@ -33,10 +33,10 @@
 
 | Feature | Description | Powered By |
 |---|---|---|
-| 📄 **Resume ATS Scorer** | Parses & grades resumes against benchmarks | GPT-4o |
+| 📄 **Resume ATS Scorer** | Parses & grades resumes against benchmarks | Gemini 2.5 Flash |
 | 🎤 **AI Interview Simulation** | Voice interviews with 5 AI personas | Groq STT + Edge TTS |
-| 🔗 **LinkedIn Optimizer** | Keyword & headline suggestions | GPT-4o |
-| ⚡ **Semi-Auto Apply** | Cover letters from job descriptions | GPT-4o |
+| 🔗 **LinkedIn Optimizer** | Keyword & headline suggestions | Gemini 2.5 Flash |
+| ⚡ **Semi-Auto Job Apply** | Cover letters from job descriptions | Gemini 2.5 Flash |
 | 📚 **Prep Hub** | Flashcards, DSA warm-ups, cheat sheets | LLM-generated |
 | 💻 **Live Code Execution** | Run 5 languages in sandboxed env | Docker-in-Docker |
 | 📊 **8D Assessment Engine** | Scores 8 dimensions in real-time | Custom LLM Pipeline |
@@ -78,11 +78,73 @@ Stop guessing how you did. Get real-time, objective scoring across 8 vectors:
 
 ## 🏗️ System Architecture
 
-![Architecture](./docs/assets/architecture.png)
+SynthHire is structured as a highly scalable microservices architecture capable of handling long-running, stateful WebSocket connections for live interview sessions.
 
-SynthHire is structured as a scalable monorepo capable of handling thousands of concurrent WebSocket connections.
-- **Microservices**: Auth, Session Orchestrator, Evaluation Engine, Code Executor, Speech Pipeline, Resumes, Jobs.
-- **Data Layer**: PostgreSQL (Relational), MongoDB (Document Storage), Redis (PubSub/Cache).
+```mermaid
+graph TD
+    %% Define Styles
+    classDef client fill:#000,stroke:#333,stroke-width:2px,color:#fff
+    classDef proxy fill:#2496ED,stroke:#fff,stroke-width:2px,color:#fff
+    classDef service fill:#005571,stroke:#fff,stroke-width:2px,color:#fff
+    classDef ai fill:#6C42A1,stroke:#fff,stroke-width:2px,color:#fff
+    classDef infra fill:#316192,stroke:#fff,stroke-width:2px,color:#fff
+    classDef queue fill:#DC382D,stroke:#fff,stroke-width:2px,color:#fff
+
+    %% Frontend & Gateway
+    Client["Client Browser<br/>(Next.js / React)"]:::client
+    Nginx["Nginx Reverse Proxy<br/>(API Gateway)"]:::proxy
+    
+    %% Core Services
+    Auth["Auth Service<br/>(JWT + User Auth)"]:::service
+    UserSvc["User/Company Service<br/>(Profiles & Mgmt)"]:::service
+    JobSvc["Job Service<br/>(Postings & Apps)"]:::service
+    
+    %% Interview Pipeline
+    Orchestrator["Session Orchestrator<br/>(WebSocket Hub)"]:::service
+    Speech["Speech Pipeline<br/>(STT/TTS Engine)"]:::service
+    Executor["Code Sandbox<br/>(Docker Execution)"]:::service
+    Assessor["Assessment Engine<br/>(Real-Time Scoring)"]:::service
+    
+    %% AI APIs
+    Gemini["Google Gemini<br/>2.5 Flash"]:::ai
+    Groq["Groq STT"]:::ai
+    Edge["Edge TTS"]:::ai
+    
+    %% Databases
+    Postgres[("PostgreSQL<br/>(Relational State)")]:::infra
+    Mongo[("MongoDB<br/>(Session Transcripts)")]:::infra
+    Redis["Redis<br/>(PubSub & Cache)"]:::queue
+
+    %% Flow Connections
+    Client <==>|HTTP / WSS| Nginx
+    
+    Nginx --> Auth
+    Nginx --> UserSvc
+    Nginx --> JobSvc
+    Nginx <==>|WSS| Orchestrator
+    
+    Auth --> Postgres
+    UserSvc --> Postgres
+    JobSvc --> Postgres
+    
+    %% Orchestrator is the brain
+    Orchestrator <--> Redis
+    Orchestrator --> Mongo
+    Orchestrator <--> Executor
+    Orchestrator <--> Assessor
+    Orchestrator <--> Speech
+    
+    %% External AI Communication
+    Assessor --> Gemini
+    Speech --> Groq
+    Speech --> Edge
+```
+
+### Component Breakdown
+- **Gateway Layer**: Nginx acts as the reverse proxy, intelligently routing stateless HTTP traffic to standard microservices while maintaining stateful, persistent WebSocket (WSS) tunnels specifically to the Orchestrator.
+- **Session Orchestrator**: The "brain" of the platform. Maintains the real-time WebSocket connection for live coding events, synchronizes the chat state via Redis PubSub, and coordinates the AI subsystems.
+- **Assessment Engine**: Passes streaming user chat context and code execution output through Google Gemini to calculate the 8-dimensions of performance.
+- **Code Sandbox**: A secure Docker-in-Docker isolated environment that compiles and runs candidate code instantly without exposing the host OS to malicious attempts.
 
 ---
 
@@ -92,7 +154,7 @@ SynthHire is structured as a scalable monorepo capable of handling thousands of 
 |---|---|
 | **Frontend** | Next.js 14, TailwindCSS, Monaco Editor, WebRTC |
 | **Backend** | FastAPI, Python 3.11, Microservices |
-| **AI / ML** | OpenAI GPT-4o, Groq STT, Edge TTS |
+| **AI / ML** | Google Gemini 2.5 Flash, Groq STT, Edge TTS |
 | **Databases** | PostgreSQL, MongoDB, Redis |
 | **DevOps** | Docker Compose, Nginx, GitHub Actions |
 | **Auth** | RSA-256 Asymmetric JWT (Zero-Trust) |
