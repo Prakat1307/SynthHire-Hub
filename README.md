@@ -14,8 +14,8 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![GitHub stars](https://img.shields.io/github/stars/YourUsername/SynthHire-Interview-Platform?style=social)
-![GitHub forks](https://img.shields.io/github/forks/YourUsername/SynthHire-Interview-Platform?style=social)
+![GitHub stars](https://img.shields.io/github/stars/Prakat1307/SynthHire-Hub?style=social)
+![GitHub forks](https://img.shields.io/github/forks/Prakat1307/SynthHire-Hub?style=social)
 
 </div>
 
@@ -168,7 +168,7 @@ SynthHire is fully containerized. You do not need to configure ports or install 
 ### 1. Environment Setup
 Clone the repository and set up your environment keys.
 ```bash
-git clone https://github.com/YourUsername/SynthHire-Interview-Platform.git
+git clone https://github.com/Prakat1307/SynthHire-Hub.git
 cd SynthHire-Interview-Platform/backend
 cp .env.template .env
 ```

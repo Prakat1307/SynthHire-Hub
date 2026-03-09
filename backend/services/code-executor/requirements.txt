@@ -1,0 +1,6 @@
+fastapi==0.109.0
+uvicorn[standard]==0.25.0
+docker==7.0.0
+
+# Import from shared
+-e ../../shared
