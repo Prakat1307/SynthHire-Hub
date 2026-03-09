@@ -198,10 +198,11 @@ docker exec -it synthhire-auth python scripts/init_db.py
 - [x] WebRTC voice integration
 - [x] 8-Dimension scoring engine
 - [x] Live code execution (5 languages)
-- [ ] Mobile app (React Native)
-- [ ] Behavioral interview mode
+- [x] Semi-Auto Job Apply Portal
+- [ ] Browser extension for accelerating semi-auto job applications
+- [ ] Mobile application (iOS & Android)
 - [ ] LeetCode-style problem bank
-- [ ] Recruiter / Company dashboard
+- [ ] Dedicated company portal to serve as a screening layer before physical interviews
 
 ---
 
