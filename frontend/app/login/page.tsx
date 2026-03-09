@@ -45,10 +45,10 @@ export default function LoginPage() {
         }
       } else if (err?.response?.status >= 500) {
         message =
-          "The server is starting up or temporarily unavailable. Please wait a moment and try again.";
+          "A server error occurred. Please try again later.";
       } else if (err?.code === "ERR_NETWORK") {
         message =
-          "Cannot connect to the server. Please check your connection or wait for the server to start.";
+          "Cannot connect to the server. Please check your internet connection and try again.";
       } else if (err?.message) {
         message = err.message;
       }

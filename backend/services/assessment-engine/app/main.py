@@ -209,7 +209,7 @@ Rate each dimension from 0.0 to 1.0:
 9. semantic_quality
 10. problem_structure
 
-Respond ONLY with valid JSON: { "technical_correctness": 0.75, ...} """
+Respond ONLY with valid JSON: {{ "technical_correctness": 0.75, ...}} """
 
     try:
         data = {
@@ -264,7 +264,7 @@ Rate each dimension from 0.0 to 1.0:
 9. semantic_quality
 10. problem_structure
 
-Respond ONLY with valid JSON: { "technical_correctness": 0.75, ...} """
+Respond ONLY with valid JSON: {{ "technical_correctness": 0.75, ...}} """
     
     last_error = None
     for attempt in range(len(GEMINI_API_KEYS)):
