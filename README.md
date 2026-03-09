@@ -23,9 +23,11 @@
 
 ## 🎬 See It In Action
 
-| Career Command Center | Interview Room | ATS Scorer |
-|:---:|:---:|:---:|
-| ![cc](./docs/assets/command-center.png) | ![ir](./docs/assets/interview-room.png) | ![ats](./docs/assets/ats-scorer.png) |
+<div align="center">
+  <img src="./docs/assets/demo.gif" alt="SynthHire Platform Demo" width="800"/>
+  <br/>
+  <i>Full Interview Simulation & Career Command Center Demo</i>
+</div>
 
 ---
 
