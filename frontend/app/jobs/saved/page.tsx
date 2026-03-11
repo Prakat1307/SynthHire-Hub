@@ -1,1 +1,44 @@
-"use client"import React from 'react'import { BookmarkCheck, Search, ArrowRight, Bell } from 'lucide-react'import GlassCard from '@/components/ui/GlassCard'import CyberButton from '@/components/ui/CyberButton'import Link from 'next/link'export default function SavedSearches() {    return (        <div className="min-h-[calc(100vh-73px)] p-8 bg-[var(--bg-deep)] text-[var(--text-primary)] relative overflow-hidden">            {}            <div className="absolute top-0 right-1/4 w-96 h-96 bg-cyber-blue-500/10 rounded-full blur-[100px] pointer-events-none" />            <div className="max-w-5xl mx-auto relative z-10">                <div className="flex items-center justify-between mb-8">                    <div>                        <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">                            <BookmarkCheck className="text-cyber-blue-400" size={32} /> Saved Searches                        </h1>                        <p className="text-[var(--text-secondary)]">Manage your automated job alerts and recurring queries.</p>                    </div>                    <Link href="/jobs">                        <CyberButton variant="outline" className="flex items-center gap-2 border-[var(--card-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">                            Back to Jobs <ArrowRight size={16} />                        </CyberButton>                    </Link>                </div>                {}                <GlassCard className="p-12 text-center flex flex-col items-center justify-center min-h-[400px] border border-cyber-blue-500/10">                    <div className="w-20 h-20 rounded-full bg-cyber-blue-500/10 flex items-center justify-center mb-6">                        <Bell size={32} className="text-cyber-blue-400" />                    </div>                    <h2 className="text-2xl font-bold mb-3">No Saved Searches Yet</h2>                    <p className="text-[var(--text-secondary)] max-w-lg mb-8">                        Run a search in the Jobs portal and click "Save This Search" to get daily email alerts for new matches that fit your criteria perfectly.                    </p>                    <Link href="/jobs">                        <CyberButton variant="primary" className="px-8 shadow-lg shadow-cyber-blue-500/20">                            Explore Jobs                        </CyberButton>                    </Link>                </GlassCard>            </div>        </div>    )}
+"use client"
+import React from 'react'
+import { BookmarkCheck, Search, ArrowRight, Bell } from 'lucide-react'
+import GlassCard from '@/components/ui/GlassCard'
+import CyberButton from '@/components/ui/CyberButton'
+import Link from 'next/link'
+export default function SavedSearches() {
+    return (
+        <div className="min-h-[calc(100vh-73px)] p-8 bg-[var(--bg-deep)] text-[var(--text-primary)] relative overflow-hidden">
+            {}
+            <div className="absolute top-0 right-1/4 w-96 h-96 bg-cyber-blue-500/10 rounded-full blur-[100px] pointer-events-none" />
+            <div className="max-w-5xl mx-auto relative z-10">
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
+                            <BookmarkCheck className="text-cyber-blue-400" size={32} /> Saved Searches
+                        </h1>
+                        <p className="text-[var(--text-secondary)]">Manage your automated job alerts and recurring queries.</p>
+                    </div>
+                    <Link href="/jobs">
+                        <CyberButton variant="outline" className="flex items-center gap-2 border-[var(--card-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                            Back to Jobs <ArrowRight size={16} />
+                        </CyberButton>
+                    </Link>
+                </div>
+                {}
+                <GlassCard className="p-12 text-center flex flex-col items-center justify-center min-h-[400px] border border-cyber-blue-500/10">
+                    <div className="w-20 h-20 rounded-full bg-cyber-blue-500/10 flex items-center justify-center mb-6">
+                        <Bell size={32} className="text-cyber-blue-400" />
+                    </div>
+                    <h2 className="text-2xl font-bold mb-3">No Saved Searches Yet</h2>
+                    <p className="text-[var(--text-secondary)] max-w-lg mb-8">
+                        Run a search in the Jobs portal and click "Save This Search" to get daily email alerts for new matches that fit your criteria perfectly.
+                    </p>
+                    <Link href="/jobs">
+                        <CyberButton variant="primary" className="px-8 shadow-lg shadow-cyber-blue-500/20">
+                            Explore Jobs
+                        </CyberButton>
+                    </Link>
+                </GlassCard>
+            </div>
+        </div>
+    )
+}

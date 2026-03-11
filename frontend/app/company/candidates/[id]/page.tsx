@@ -82,7 +82,7 @@ export default function CandidateReviewPage() {
         prev ? { ...prev, status: res.data.assignment_status } : null,
       );
       setReviewNotes("");
-      // Re-fetch to get the new review in the list
+      
       fetchCandidate(companyId);
     } catch (error) {
       toast.error("Failed to submit review");

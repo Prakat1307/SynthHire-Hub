@@ -1,14 +1,13 @@
-
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from uuid import UUID
 
 class SessionCreate(BaseModel):
-    session_type: str = Field(..., pattern="^(coding|system_design|behavioral|mixed)$")
-    persona_type: str = Field(default="kind_mentor")
-    coaching_mode: str = Field(default="training", pattern="^(training|simulation)$")
-    assessment_mode: str = Field(default="practice", pattern="^(practice|timed_mock|certified)$")
+    session_type: str = Field(..., pattern='^(coding|system_design|behavioral|mixed)$')
+    persona_type: str = Field(default='kind_mentor')
+    coaching_mode: str = Field(default='training', pattern='^(training|simulation)$')
+    assessment_mode: str = Field(default='practice', pattern='^(practice|timed_mock|certified)$')
     difficulty_level: int = Field(default=5, ge=1, le=10)
     company_id: Optional[str] = None
     company_slug: Optional[str] = None
@@ -37,7 +36,7 @@ class SessionResponse(BaseModel):
     duration_seconds: Optional[int] = None
     time_limit_minutes: Optional[int] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -73,9 +72,9 @@ class TemplateCreate(BaseModel):
     role: str
     round_type: str
     experience_level: Optional[str] = None
-    persona_type: str = "kind_mentor"
+    persona_type: str = 'kind_mentor'
     system_prompt: str
-    difficulty_range: Dict[str, int] = {"min": 1, "max": 10}
+    difficulty_range: Dict[str, int] = {'min': 1, 'max': 10}
     duration_minutes: int = 45
     is_public: bool = True
 
@@ -90,6 +89,6 @@ class TemplateResponse(BaseModel):
     duration_minutes: int
     is_public: bool
     created_at: datetime
-    
+
     class Config:
         from_attributes = True

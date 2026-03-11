@@ -23,7 +23,7 @@ class JobListingUpdate(BaseModel):
     location: Optional[str] = None
     is_remote: Optional[bool] = None
     salary_range: Optional[str] = None
-    status: Optional[str] = None  
+    status: Optional[str] = None
     expires_at: Optional[datetime] = None
 
 class JobListingResponse(JobListingBase):
@@ -36,7 +36,6 @@ class JobListingResponse(JobListingBase):
     expires_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
-    
     company_name: Optional[str] = None
     match_score: Optional[float] = None
 
@@ -58,7 +57,6 @@ class JobApplicationResponse(BaseModel):
     ai_match_score: Optional[float]
     applied_at: datetime
     updated_at: datetime
-    
     job_title: Optional[str] = None
     company_name: Optional[str] = None
 

@@ -1,30 +1,30 @@
-/** @type {import('tailwindcss').Config} */
+
 module.exports = {
     darkMode: 'class',
     content: [
-        './pages/**/*.{js,ts,jsx,tsx,mdx}',
-        './components/**/*.{js,ts,jsx,tsx,mdx}',
-        './app/**/*.{js,ts,jsx,tsx,mdx}',
+        './pages*.{js,ts,jsx,tsx,mdx}',
+        './components*.{js,ts,jsx,tsx,mdx}',
+        './app*.{js,ts,jsx,tsx,mdx}',
     ],
     theme: {
         extend: {
             colors: {
                 cyber: {
                     slate: {
-                        950: '#09090b', // zinc-950
-                        900: '#18181b', // zinc-900
-                        800: '#27272a', // zinc-800
-                        700: '#3f3f46', // zinc-700
+                        950: '#09090b', 
+                        900: '#18181b', 
+                        800: '#27272a', 
+                        700: '#3f3f46', 
                     },
                     teal: {
-                        500: '#3b82f6', // blue-500
-                        400: '#60a5fa', // blue-400
-                        900: '#1e3a8a', // blue-900
+                        500: '#3b82f6', 
+                        400: '#60a5fa', 
+                        900: '#1e3a8a', 
                     },
                     purple: {
-                        500: '#8b5cf6', // violet-500
-                        400: '#a78bfa', // violet-400
-                        900: '#4c1d95', // violet-900
+                        500: '#8b5cf6', 
+                        400: '#a78bfa', 
+                        900: '#4c1d95', 
                     },
                     violet: {
                         500: '#8b5cf6',

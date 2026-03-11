@@ -1,28 +1,27 @@
-
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
 class ToneEnum(str, Enum):
-    FORMAL = "formal"
-    CONVERSATIONAL = "conversational"
-    ASSERTIVE = "assertive"
-    WARM = "warm"
+    FORMAL = 'formal'
+    CONVERSATIONAL = 'conversational'
+    ASSERTIVE = 'assertive'
+    WARM = 'warm'
 
 class LengthEnum(str, Enum):
-    SHORT = "short"
-    MEDIUM = "medium"
-    DETAILED = "detailed"
+    SHORT = 'short'
+    MEDIUM = 'medium'
+    DETAILED = 'detailed'
 
 class FormatEnum(str, Enum):
-    STAR = "star"
-    BULLET_POINTS = "bullet_points"
-    FLOWING = "flowing"
+    STAR = 'star'
+    BULLET_POINTS = 'bullet_points'
+    FLOWING = 'flowing'
 
 class ResumeParseResponse(BaseModel):
     raw_text: str
-    parsed: dict  
+    parsed: dict
     resume_version_id: str
 
 class ResumeVersionResponse(BaseModel):
@@ -44,8 +43,8 @@ class JobTargetingRequest(BaseModel):
     industry: Optional[str] = None
     target_companies: List[str] = Field(default_factory=list)
     years_of_experience: Optional[int] = None
-    work_preference: Optional[str] = None  
-    experience_level: Optional[str] = None  
+    work_preference: Optional[str] = None
+    experience_level: Optional[str] = None
 
 class PersonalStoryCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
@@ -100,7 +99,7 @@ class PreferencesResponse(BaseModel):
 
 class OnboardingStatusResponse(BaseModel):
     onboarding_completed: bool
-    current_step: int  
+    current_step: int
     resume_uploaded: bool
     job_targeting_done: bool
     stories_count: int

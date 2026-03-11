@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -10,19 +9,19 @@ class ATSAnalyzeRequest(BaseModel):
 class KeywordMatch(BaseModel):
     keyword: str
     found: bool
-    context: Optional[str] = None  
+    context: Optional[str] = None
 
 class ATSAnalyzeResponse(BaseModel):
-    match_score: float  
+    match_score: float
     matched_keywords: List[KeywordMatch]
     missing_keywords: List[str]
     suggestions: List[str]
-    category_scores: dict  
+    category_scores: dict
 
 class BulletRewriteRequest(BaseModel):
     original_bullet: str = Field(..., min_length=5)
     job_description: str = Field(..., min_length=50)
-    tone: str = "professional"  
+    tone: str = 'professional'
 
 class BulletRewriteResponse(BaseModel):
     original: str
@@ -43,7 +42,7 @@ class CoverLetterRequest(BaseModel):
     job_description: str = Field(..., min_length=50)
     company_name: str = Field(..., min_length=1)
     hiring_manager: Optional[str] = None
-    angle: str = "balanced"  
+    angle: str = 'balanced'
 
 class CoverLetterResponse(BaseModel):
     cover_letter: str
@@ -109,16 +108,16 @@ class PrepDraftResponse(BaseModel):
 
 class ExportRequest(BaseModel):
     resume_version_id: str
-    template: str = "modern"  
-    format: str = "pdf"  
+    template: str = 'modern'
+    format: str = 'pdf'
 
 class ExportResponse(BaseModel):
     download_url: str
     file_name: str
 
 class LinkedInOptimizeRequest(BaseModel):
-    section: str = Field(..., description="headline | about | experience | skills | projects | open_to_work")
-    resume_data: str = Field(..., description="Full text or data of the resume to extract from.")
+    section: str = Field(..., description='headline | about | experience | skills | projects | open_to_work')
+    resume_data: str = Field(..., description='Full text or data of the resume to extract from.')
     target_role: Optional[str] = None
     job_description: Optional[str] = None
     existing_linkedin_text: Optional[str] = None
@@ -144,7 +143,7 @@ class LinkedInKeywordMatchResponse(BaseModel):
     priority_adds: List[str]
 
 class LinkedInFetchRequest(BaseModel):
-    url: str = Field(..., description="LinkedIn profile URL to fetch")
+    url: str = Field(..., description='LinkedIn profile URL to fetch')
 
 class LinkedInFetchResponse(BaseModel):
     profile_text: str

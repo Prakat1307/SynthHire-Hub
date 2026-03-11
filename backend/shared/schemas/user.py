@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -9,11 +8,11 @@ class UserProfileCreate(BaseModel):
     target_role: Optional[str] = None
     experience_level: Optional[str] = None
     years_of_experience: Optional[int] = None
-    preferred_language: str = "python"
+    preferred_language: str = 'python'
     interview_timeline: Optional[str] = None
     timezone: Optional[str] = None
     self_assessed_weaknesses: List[str] = []
-    coaching_mode: str = "training"
+    coaching_mode: str = 'training'
     webcam_enabled: bool = False
 
 class UserProfileResponse(BaseModel):
@@ -30,7 +29,7 @@ class UserProfileResponse(BaseModel):
     coaching_mode: str
     webcam_enabled: bool
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 

@@ -65,12 +65,12 @@ export default function JobsPortal() {
   const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
   const [showPreApplyModal, setShowPreApplyModal] = useState(false);
   const [jobToApply, setJobToApply] = useState<Job | null>(null);
-  // Resume upload state
+  
   const [resumeText, setResumeText] = useState<string>("");
   const [resumeFileName, setResumeFileName] = useState<string>("");
   const [isProcessingResume, setIsProcessingResume] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Load saved resume from localStorage on mount
+  
   useEffect(() => {
     const savedResume = localStorage.getItem("jobs_resume_text");
     const savedName = localStorage.getItem("jobs_resume_filename");
@@ -125,7 +125,7 @@ export default function JobsPortal() {
     setSelectedJob(null);
     try {
       const apiBase =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+        process.env.NEXT_PUBLIC_API_URL || "http:
       const response = await fetch(
         `${apiBase}/api/jobs/jobs/search/aggregate`,
         {
@@ -170,7 +170,7 @@ export default function JobsPortal() {
         text = await file.text();
       } else {
         const apiBase =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+          process.env.NEXT_PUBLIC_API_URL || "http:
         const formData = new FormData();
         formData.append("file", file);
         const response = await fetch(
@@ -249,7 +249,7 @@ export default function JobsPortal() {
     }
     try {
       const apiBase =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+        process.env.NEXT_PUBLIC_API_URL || "http:
       const response = await fetch(`${apiBase}/api/jobs/jobs/calculate-match`, {
         method: "POST",
         headers: {
@@ -317,7 +317,7 @@ export default function JobsPortal() {
     );
     try {
       const apiBase =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+        process.env.NEXT_PUBLIC_API_URL || "http:
       const response = await fetch(`${apiBase}/api/jobs/jobs/auto-apply`, {
         method: "POST",
         headers: {
@@ -326,7 +326,7 @@ export default function JobsPortal() {
         },
         body: JSON.stringify({
           job_id: jobToApply.job_id,
-          job_url: jobToApply.apply_url || "https://example.com/apply",
+          job_url: jobToApply.apply_url || "https:
           require_manual_review: false,
         }),
       });

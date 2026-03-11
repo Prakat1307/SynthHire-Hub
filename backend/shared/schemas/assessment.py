@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -19,8 +18,8 @@ class AssessmentRequest(BaseModel):
     exchange_number: int
     response_text: str
     question_text: Optional[str] = None
-    session_type: str = "coding"
-    provider: Optional[str] = "openai"  
+    session_type: str = 'coding'
+    provider: Optional[str] = 'openai'
 
 class AssessmentResponse(BaseModel):
     scores: DimensionScores
@@ -30,14 +29,14 @@ class AssessmentResponse(BaseModel):
 class CoachingHint(BaseModel):
     hint: str
     dimension: str
-    priority: str = "medium"
+    priority: str = 'medium'
     timestamp: Optional[datetime] = None
 
 class CoachingHintsRequest(BaseModel):
     scores: Dict[str, float]
     session_type: str
     exchange_number: int
-    coaching_mode: str = "training"
+    coaching_mode: str = 'training'
 
 class CoachingHintsResponse(BaseModel):
     hints: List[CoachingHint]
@@ -57,13 +56,13 @@ class ReportResponse(BaseModel):
     readiness_score: Optional[float] = None
     generation_status: str
     generated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
 class CodeExecutionRequest(BaseModel):
     code: str
-    language: str = Field(..., pattern="^(python|javascript|java|cpp|go|rust)$")
+    language: str = Field(..., pattern='^(python|javascript|java|cpp|go|rust)$')
     session_id: Optional[str] = None
     test_cases: Optional[List[Dict[str, Any]]] = None
 

@@ -1,1 +1,632 @@
-'use client';import { useEffect, useState, useCallback } from 'react';import { useRouter } from 'next/navigation';import { useAuthStore } from '@/lib/stores/authStore';import api from '@/src/lib/api';import { motion, AnimatePresence } from 'framer-motion';import toast, { Toaster } from 'react-hot-toast';import {    FileText, Scan, PenLine, Sparkles, Clock, RefreshCw,    Upload, Target, CheckCircle2, X, ChevronRight, Copy, ListChecks} from 'lucide-react';const { apiClient, getServiceUrl } = api;interface KeywordMatch {    keyword: string;    found: boolean;    context?: string;}interface KeyStrengthMatch {    category: string;    match_percentage: number;    explanation: string;}interface ATSResult {    match_score: number;    matched_keywords: KeywordMatch[];    missing_keywords: string[];    suggestions: string[];    key_strength_matches?: KeyStrengthMatch[];    category_scores: Record<string, number>;}interface ResumeVersion {    id: string;    label: string;    is_master: boolean;    raw_text: string;    parsed_json: any;    file_name: string | null;    match_score: number | null;    version_number: number;    created_at: string;}interface ScanHistoryItem {    id: string;    date: string;    score: number;    resumeId: string;    resumeLabel: string;    jobRole: string;    jobDescriptionSnippet: string;    result: ATSResult;}function MinimalCard({ children, className = '', onClick }: { children: React.ReactNode, className?: string, onClick?: () => void }) {    return (        <div            onClick={onClick}            className={`bg-[#0A0D14]/80 backdrop-blur-md border border-[var(--card-border)] rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] ${className} ${onClick ? 'cursor-pointer hover:bg-[var(--card-bg)] transition-colors' : ''}`}        >            {children}        </div>    );}// ── Tab Config ──const TABS = [    { id: 'ats', label: 'ATS Analyzer', icon: Scan },    { id: 'history', label: 'Scan History', icon: Clock },    { id: 'cover', label: 'Cover Letter', icon: PenLine },];export default function ResumeBuilderPage() {    const router = useRouter();    const { isAuthenticated, isLoading: authLoading, accessToken, user } = useAuthStore();    const [activeTab, setActiveTab] = useState('ats');    const [isLoading, setIsLoading] = useState(false);    const [versions, setVersions] = useState<ResumeVersion[]>([]);    const [activeVersion, setActiveVersion] = useState<ResumeVersion | null>(null);    const [isUploading, setIsUploading] = useState(false);    const [jobDescription, setJobDescription] = useState('');    const [jobRole, setJobRole] = useState(''); // To label scans    // Analysis Results    const [atsResult, setAtsResult] = useState<ATSResult | null>(null);    // History    const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>([]);    // Features    const [selectedBullet, setSelectedBullet] = useState('');    const [rewrittenBullet, setRewrittenBullet] = useState<{ original: string; rewritten: string; improvement_notes: string } | null>(null);    const [companyName, setCompanyName] = useState('');    const [hiringManager, setHiringManager] = useState('');    const [coverLetterAngle, setCoverLetterAngle] = useState('balanced');    const [coverLetter, setCoverLetter] = useState<{ cover_letter: string; word_count: number; key_points: string[] } | null>(null);    useEffect(() => {        if (!authLoading && !isAuthenticated) {            router.push('/login');        }    }, [authLoading, isAuthenticated, router]);    useEffect(() => {        if (isAuthenticated && user) {            loadVersions();            const savedHistory = localStorage.getItem(`synthhire_ats_history_${user.id}`);            if (savedHistory) {                try { setScanHistory(JSON.parse(savedHistory)); } catch (e) { }            }        }    }, [isAuthenticated, user]);    const loadVersions = async () => {        try {            const headers = { Authorization: `Bearer ${accessToken}` };            const res = await apiClient.get(`${getServiceUrl('onboarding')}/onboarding/resume/versions`, { headers });            setVersions(res.data);            if (res.data.length > 0) {                const stillExists = activeVersion ? res.data.find((v: ResumeVersion) => v.id === activeVersion.id) : null;                if (!stillExists) {                    const master = res.data.find((v: ResumeVersion) => v.is_master) || res.data[0];                    setActiveVersion(master);                } else {                    setActiveVersion(stillExists);                }            } else {                setActiveVersion(null);            }        } catch { }    };    const handleDelete = async (id: string) => {        if (!confirm('Are you sure you want to delete this resume?')) return;        try {            const headers = { Authorization: `Bearer ${accessToken}` };            await apiClient.delete(`${getServiceUrl('onboarding')}/onboarding/resume/versions/${id}`, { headers });            toast.success('Resume deleted successfully.');            setScanHistory(prev => {                const newHistory = prev.filter(h => h.resumeId !== id);                if (user) {                    localStorage.setItem(`synthhire_ats_history_${user.id}`, JSON.stringify(newHistory));                }                return newHistory;            });            await loadVersions();        } catch (err: any) {            toast.error(err?.response?.data?.detail || 'Failed to delete resume');        }    };    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {        const file = e.target.files?.[0];        if (!file) return;        setIsUploading(true);        try {            const formData = new FormData();            formData.append('resume_file', file);            formData.append('file_name', file.name);            const headers = {                Authorization: `Bearer ${accessToken}`,                'Content-Type': 'multipart/form-data'            };            await apiClient.post(`${getServiceUrl('onboarding')}/onboarding/resume/upload`, formData, { headers });            toast.success('Resume uploaded successfully!');            await loadVersions();         } catch (err: any) {            toast.error(err?.response?.data?.detail || 'Failed to upload resume');        } finally {            setIsUploading(false);            e.target.value = ''; // Reset input        }    };    // ── ATS Analysis ──    const handleAnalyze = async () => {        if (!activeVersion || !jobDescription.trim() || !jobRole.trim()) {            toast.error('Please select a resume, and provide a Job Role and Description.');            return;        }        setIsLoading(true);        try {            const headers = { Authorization: `Bearer ${accessToken}` };            const res = await apiClient.post(`${getServiceUrl('resume')}/resume/analyze`, {                resume_text: activeVersion.raw_text,                job_description: jobDescription,            }, { headers });            const result = res.data;            setAtsResult(result);            const historyItem: ScanHistoryItem = {                id: crypto.randomUUID(),                date: new Date().toISOString(),                score: result.match_score,                resumeId: activeVersion.id,                resumeLabel: activeVersion.file_name || activeVersion.label,                jobRole: jobRole,                jobDescriptionSnippet: jobDescription.substring(0, 100) + '...',                result: result            };            const newHistory = [historyItem, ...scanHistory];            setScanHistory(newHistory);            if (user) {                localStorage.setItem(`synthhire_ats_history_${user.id}`, JSON.stringify(newHistory));            }            toast.success('Analysis complete!');        } catch (err: any) {            toast.error(err?.response?.data?.detail || 'Analysis failed');        } finally {            setIsLoading(false);        }    };    const handleGenerateCover = async () => {        if (!jobDescription.trim() || !companyName.trim()) {            toast.error('Please provide company name and job description');            return;        }        setIsLoading(true);        try {            const headers = { Authorization: `Bearer ${accessToken}` };            const res = await apiClient.post(`${getServiceUrl('resume')}/resume/cover-letter`, {                job_description: jobDescription,                company_name: companyName,                hiring_manager: hiringManager || undefined,                angle: coverLetterAngle,            }, { headers });            setCoverLetter(res.data);            toast.success('Cover letter generated!');        } catch (err: any) {            toast.error(err?.response?.data?.detail || 'Generation failed');        } finally {            setIsLoading(false);        }    };    const handleRewriteBullet = async () => {        if (!selectedBullet.trim() || !jobDescription.trim()) {            toast.error('Select a bullet and provide a JD');            return;        }        setIsLoading(true);        try {            const headers = { Authorization: `Bearer ${accessToken}` };            const res = await apiClient.post(`${getServiceUrl('resume')}/resume/rewrite-bullet`, {                original_bullet: selectedBullet,                job_description: jobDescription,                tone: 'professional'             }, { headers });            setRewrittenBullet(res.data);            toast.success('Bullet rewritten!');        } catch (err: any) {            toast.error(err?.response?.data?.detail || 'Rewrite failed');        } finally {            setIsLoading(false);        }    };    const copyToClipboard = (text: string) => {        navigator.clipboard.writeText(text);        toast.success('Copied to clipboard!');    };    const clearHistory = () => {        setScanHistory([]);        if (user) {            localStorage.removeItem(`synthhire_ats_history_${user.id}`);        }        toast.success("History cleared");    }    if (authLoading) return <div className="min-h-screen" />;    return (        <div className="min-h-screen font-sans selection:bg-indigo-500/30 overflow-x-hidden pt-12">            {}            <div className="fixed inset-0 pointer-events-none z-0">                <div className="absolute top-[10%] right-[10%] w-[50%] h-[50%] rounded-full bg-violet-600/5 blur-[150px]"></div>                <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-600/5 blur-[150px]"></div>            </div>            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 pb-24">                <Toaster position="top-right" toastOptions={{                    style: { background: '#111827', color: '#F3F4F6', border: '1px solid rgba(255,255,255,0.1)' }                }} />                {}                <div className="mb-10">                    <h1 className="text-3xl md:text-5xl font-light tracking-tight text-[var(--text-primary)] mb-2">                        Resume <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">Builder</span>                    </h1>                    <p className="text-[var(--text-secondary)] text-lg font-light tracking-wide">                        Optimize your resume versions, analyze ATS fit, and track your history.                    </p>                </div>                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">                    {}                    <div className="lg:col-span-4 space-y-6">                        <MinimalCard className="p-6">                            <h3 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-widest mb-4">Your Resumes</h3>                            {}                            <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">                                {versions.map(v => (                                    <div                                        key={v.id}                                        onClick={() => setActiveVersion(v)}                                        className={`p-4 rounded-xl cursor-pointer transition-all border relative group ${activeVersion?.id === v.id ? 'bg-violet-500/10 border-violet-500/30' : 'bg-white/5 border-transparent hover:border-white/10'}`}                                    >                                        <div className="flex items-center justify-between mb-1 pr-6">                                            <div className="flex items-center gap-2">                                                <FileText className={`w-4 h-4 ${activeVersion?.id === v.id ? 'text-violet-400' : 'text-[var(--text-muted)]'}`} />                                                <span className={`text-sm font-medium ${activeVersion?.id === v.id ? 'text-violet-200' : 'text-[var(--text-primary)]'}`}>                                                    {v.file_name || v.label}                                                </span>                                            </div>                                            {v.is_master && <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Master</span>}                                        </div>                                        <p className="text-[11px] text-[var(--text-muted)] mt-2 pl-6">                                            Uploaded: {new Date(v.created_at).toLocaleDateString()}                                        </p>                                        <button                                            onClick={(e) => { e.stopPropagation(); handleDelete(v.id); }}                                            className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"                                        >                                            <X className="w-4 h-4" />                                        </button>                                    </div>                                ))}                                {versions.length === 0 && (                                    <p className="text-sm text-[var(--text-muted)] text-center py-6">No resumes uploaded yet.</p>                                )}                            </div>                            {}                            <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed ${isUploading ? 'border-violet-500/50 bg-violet-500/5' : 'border-white/10 hover:border-violet-500/30 hover:bg-[var(--card-bg)]'} rounded-xl cursor-pointer transition-all group relative overflow-hidden`}>                                {isUploading ? (                                    <div className="flex flex-col items-center text-violet-400">                                        <RefreshCw className="w-6 h-6 animate-spin mb-2" />                                        <span className="text-sm">Uploading...</span>                                    </div>                                ) : (                                    <>                                        <Upload className="w-6 h-6 text-[var(--text-muted)] group-hover:text-violet-400 transition-colors mb-2" />                                        <span className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] font-medium">Upload New Resume</span>                                        <span className="text-[10px] text-[var(--text-muted)] mt-1">PDF, DOCX, TXT</span>                                    </>                                )}                                <input type="file" disabled={isUploading} accept=".pdf,.docx,.txt,.doc" onChange={handleFileUpload} className="hidden" />                            </label>                        </MinimalCard>                        {}                        <MinimalCard className="p-6">                            <h3 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-widest mb-4 flex items-center gap-2">                                <Target className="w-4 h-4 text-cyan-400" /> Target Job                            </h3>                            <div className="space-y-4">                                <input                                    value={jobRole}                                    onChange={(e) => setJobRole(e.target.value)}                                    placeholder="Target Role (e.g. Senior SWE)"                                    className="w-full bg-[#111622] border border-white/5 rounded-lg px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"                                />                                <textarea                                    value={jobDescription}                                    onChange={(e) => setJobDescription(e.target.value)}                                    placeholder="Paste the full job description here..."                                    className="w-full h-48 bg-[#111622] border border-white/5 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)] placeholder-slate-500 resize-none focus:outline-none focus:border-cyan-500/50 transition-colors"                                />                            </div>                        </MinimalCard>                    </div>                    {}                    <div className="lg:col-span-8 space-y-6">                        {}                        <div className="flex gap-2 p-1 bg-[#111622]/50 border border-[var(--card-border)] rounded-xl inline-flex w-full overflow-x-auto custom-scrollbar">                            {TABS.map(tab => {                                const Icon = tab.icon;                                const isActive = activeTab === tab.id;                                return (                                    <button                                        key={tab.id}                                        onClick={() => setActiveTab(tab.id)}                                        className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${isActive                                            ? 'bg-gradient-to-r from-violet-500/10 to-cyan-500/10 text-[var(--text-primary)] border border-white/10'                                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 border border-transparent'}`}                                    >                                        <Icon className="w-4 h-4" />                                        {tab.label}                                    </button>                                );                            })}                        </div>                        <AnimatePresence mode="wait">                            <motion.div                                key={activeTab}                                initial={{ opacity: 0, y: 10 }}                                animate={{ opacity: 1, y: 0 }}                                exit={{ opacity: 0, y: -10 }}                                transition={{ duration: 0.2 }}                            >                                {}                                {activeTab === 'ats' && (                                    <div className="space-y-6">                                        <button                                            onClick={handleAnalyze} disabled={isLoading}                                            className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center gap-3 text-[var(--text-primary)] font-medium transition-all disabled:opacity-50"                                        >                                            {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Scan className="w-5 h-5 text-violet-400" />}                                            {isLoading ? 'Scanning Resume parameters...' : 'Run ATS Analysis'}                                        </button>                                        {atsResult && (                                            <MinimalCard className="p-6 md:p-8">                                                <div className="flex flex-col md:flex-row gap-8 items-start md:items-center border-b border-white/5 pb-8 mb-8">                                                    {}                                                    <div className="relative w-32 h-32 flex-shrink-0 mx-auto md:mx-0">                                                        <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">                                                            <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />                                                            <circle cx="40" cy="40" r="35" fill="none"                                                                stroke={atsResult.match_score >= 75 ? '#10B981' : atsResult.match_score >= 50 ? '#F59E0B' : '#EF4444'}                                                                strokeWidth="6" strokeLinecap="round" strokeDasharray="220"                                                                strokeDashoffset={220 - (220 * atsResult.match_score) / 100}                                                                className="transition-all duration-1000 ease-out"                                                            />                                                        </svg>                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">                                                            <span className="text-3xl font-bold text-[var(--text-primary)]">{atsResult.match_score}</span>                                                            <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-widest">Match</span>                                                        </div>                                                    </div>                                                    {}                                                    <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-4">                                                        {Object.entries(atsResult.category_scores || {}).map(([cat, score]) => (                                                            <div key={cat} className="bg-[var(--card-bg)] rounded-lg p-3 border border-[var(--card-border)]">                                                                <div className="flex justify-between text-xs mb-2">                                                                    <span className="text-[var(--text-primary)] capitalize font-medium">{cat.replace('_', ' ')}</span>                                                                    <span className={score >= 70 ? 'text-emerald-400' : score >= 40 ? 'text-yellow-400' : 'text-red-400'}>{score}%</span>                                                                </div>                                                                <div className="h-1.5 w-full bg-[#0A0D14] rounded-full overflow-hidden">                                                                    <div className={`h-full rounded-full ${score >= 70 ? 'bg-emerald-500' : score >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${score}%` }} />                                                                </div>                                                            </div>                                                        ))}                                                    </div>                                                </div>                                                {}                                                {atsResult.key_strength_matches && atsResult.key_strength_matches.length > 0 && (                                                    <div className="mb-8 bg-[var(--card-bg)] border border-white/5 rounded-xl overflow-hidden">                                                        <h4 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-widest bg-[#0A0D14] p-4 border-b border-white/5 flex items-center gap-2">                                                            <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Key Strength Matches                                                        </h4>                                                        <div className="divide-y divide-white/5">                                                            {atsResult.key_strength_matches.map((ksm, i) => (                                                                <div key={i} className="p-4 flex flex-col md:flex-row gap-4 hover:bg-[var(--card-bg)] transition-colors">                                                                    <div className="w-full md:w-1/4">                                                                        <span className="text-sm font-semibold text-[var(--text-primary)] block">{ksm.category}</span>                                                                        <div className="flex items-center gap-1 mt-1">                                                                            {Array.from({ length: 5 }).map((_, idx) => (                                                                                <svg key={idx} className={`w-3 h-3 ${idx < Math.round(ksm.match_percentage / 20) ? 'text-yellow-400' : 'text-slate-600'}`} fill="currentColor" viewBox="0 0 20 20">                                                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />                                                                                </svg>                                                                            ))}                                                                            <span className="text-xs text-[var(--text-secondary)] ml-1">({ksm.match_percentage}%)</span>                                                                        </div>                                                                    </div>                                                                    <div className="flex-1 text-sm text-[var(--text-primary)] leading-relaxed">                                                                        {ksm.explanation}                                                                    </div>                                                                </div>                                                            ))}                                                        </div>                                                    </div>                                                )}                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">                                                    {}                                                    <div className="space-y-6">                                                        <div>                                                            <h4 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest mb-3 flex items-center gap-2">                                                                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Matched Keywords                                                            </h4>                                                            <div className="flex flex-wrap gap-2">                                                                {atsResult.matched_keywords.filter(k => k.found).map((k, i) => (                                                                    <span key={i} className="px-2.5 py-1 text-xs rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">                                                                        {k.keyword}                                                                    </span>                                                                ))}                                                            </div>                                                        </div>                                                        {atsResult.missing_keywords.length > 0 && (                                                            <div>                                                                <h4 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest mb-3 flex items-center gap-2">                                                                    <X className="w-4 h-4 text-red-400" /> Missing Keywords                                                                </h4>                                                                <div className="flex flex-wrap gap-2">                                                                    {atsResult.missing_keywords.map((k, i) => (                                                                        <span key={i} className="px-2.5 py-1 text-xs rounded-md bg-red-500/10 text-red-300 border border-red-500/20">                                                                            {k}                                                                        </span>                                                                    ))}                                                                </div>                                                            </div>                                                        )}                                                    </div>                                                    {}                                                    <div className="space-y-6 bg-[var(--card-bg)] p-6 rounded-xl border border-white/5">                                                        <div>                                                            <h4 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest mb-3 flex items-center gap-2">                                                                <ListChecks className="w-4 h-4 text-blue-400" /> 🚀 How to Strengthen Your Fit                                                            </h4>                                                            <ul className="space-y-3">                                                                {atsResult.suggestions.map((s, i) => (                                                                    <li key={i} className="text-sm text-[var(--text-primary)] flex items-start gap-2">                                                                        <span className="text-blue-500 opacity-50 mt-1">•</span> {s}                                                                    </li>                                                                ))}                                                            </ul>                                                        </div>                                                        {}                                                        <div className="pt-6 border-t border-white/5">                                                            <h4 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest mb-3 flex items-center gap-2">                                                                <PenLine className="w-4 h-4 text-violet-400" /> Bullet Optimizer                                                            </h4>                                                            <textarea                                                                value={selectedBullet} onChange={(e) => setSelectedBullet(e.target.value)}                                                                placeholder="Paste a weak bullet point to AI-optimize for this JD..."                                                                className="w-full h-20 bg-[#0A0D14] border border-white/5 rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] placeholder-slate-600 resize-none focus:outline-none focus:border-violet-500/50 mb-2"                                                            />                                                            <button                                                                onClick={handleRewriteBullet} disabled={isLoading || !selectedBullet}                                                                className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-[var(--text-primary)] transition-colors"                                                            >                                                                Rewrite Bullet                                                            </button>                                                            {rewrittenBullet && (                                                                <div className="mt-4 bg-violet-500/5 border border-violet-500/10 rounded-lg p-3 space-y-3">                                                                    <div><p className="text-[10px] text-red-400 uppercase font-semibold">Original</p><p className="text-xs text-[var(--text-secondary)] line-through opacity-70">{rewrittenBullet.original}</p></div>                                                                    <div><p className="text-[10px] text-emerald-400 uppercase font-semibold">Rewritten</p><p className="text-sm text-[var(--text-primary)] font-medium">{rewrittenBullet.rewritten}</p></div>                                                                    <div className="flex justify-between items-center"><p className="text-[10px] text-violet-300 italic flex-1">{rewrittenBullet.improvement_notes}</p><button onClick={() => copyToClipboard(rewrittenBullet.rewritten)} className="p-1.5 hover:bg-white/10 rounded flex-shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"><Copy className="w-3.5 h-3.5" /></button></div>                                                                </div>                                                            )}                                                        </div>                                                    </div>                                                </div>                                            </MinimalCard>                                        )}                                        {}                                        {!atsResult && !isLoading && (                                            <div className="py-20 flex flex-col items-center justify-center text-center opacity-40">                                                <Scan className="w-16 h-16 mb-4" />                                                <p className="text-lg font-medium">No Analysis Data</p>                                                <p className="text-sm">Select a Resume and Job Description to begin</p>                                            </div>                                        )}                                    </div>                                )}                                {}                                {activeTab === 'history' && (                                    <MinimalCard className="p-6">                                        <div className="flex items-center justify-between mb-6">                                            <h3 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-widest">Local Scan History</h3>                                            {scanHistory.length > 0 && <button onClick={clearHistory} className="text-xs text-red-400 hover:text-red-300">Clear History</button>}                                        </div>                                        <div className="space-y-4">                                            {scanHistory.map((item) => (                                                <div key={item.id} className="flex flex-col md:flex-row gap-4 p-4 rounded-xl bg-[var(--card-bg)] border border-white/5 hover:bg-[var(--card-bg)] transition-colors relative overflow-hidden group">                                                    {}                                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 flex-col                                                        ${item.score >= 75 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :                                                            item.score >= 50 ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :                                                                'bg-red-500/10 text-red-400 border border-red-500/20'}`}>                                                        <span className="text-xl font-bold leading-none mb-1">{item.score}</span>                                                        <span className="text-[9px] uppercase font-bold tracking-widest">Score</span>                                                    </div>                                                    <div className="flex-1 min-w-0">                                                        <div className="flex justify-between items-start mb-1">                                                            <h4 className="text-base font-semibold text-[var(--text-primary)] truncate pr-4">{item.jobRole || 'Unknown Role'}</h4>                                                            <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{new Date(item.date).toLocaleDateString()}</span>                                                        </div>                                                        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)] mb-2">                                                            <FileText className="w-3.5 h-3.5" /> {item.resumeLabel}                                                        </div>                                                        <p className="text-xs text-[var(--text-muted)] italic line-clamp-1 border-l-2 border-white/10 pl-2">"{item.jobDescriptionSnippet}"</p>                                                    </div>                                                </div>                                            ))}                                            {scanHistory.length === 0 && (                                                <div className="py-12 flex flex-col items-center justify-center text-center opacity-40">                                                    <Clock className="w-12 h-12 mb-3" />                                                    <p className="text-sm">Your past ATS scan results will appear here.</p>                                                </div>                                            )}                                        </div>                                    </MinimalCard>                                )}                                {}                                {activeTab === 'cover' && (                                    <MinimalCard className="p-6 md:p-8">                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">                                            <div className="space-y-4">                                                <div className="space-y-2">                                                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">Company Name</label>                                                    <input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Acme Corp" className="w-full bg-[#111622] border border-white/5 rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/50" />                                                </div>                                                <div className="space-y-2">                                                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">Hiring Manager</label>                                                    <input value={hiringManager} onChange={e => setHiringManager(e.target.value)} placeholder="Optional" className="w-full bg-[#111622] border border-white/5 rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/50" />                                                </div>                                            </div>                                            <div className="space-y-2">                                                <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">Letter Angle</label>                                                <div className="grid grid-cols-2 gap-2">                                                    {['balanced', 'technical', 'leadership', 'passion'].map(a => (                                                        <button                                                            key={a} onClick={() => setCoverLetterAngle(a)}                                                            className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-colors ${coverLetterAngle === a ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50' : 'bg-[#111622] text-[var(--text-secondary)] border border-white/5 hover:border-white/20'}`}                                                        >                                                            {a}                                                        </button>                                                    ))}                                                </div>                                            </div>                                        </div>                                        <button                                            onClick={handleGenerateCover} disabled={isLoading}                                            className="w-full py-3 bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 rounded-xl flex items-center justify-center gap-2 text-[var(--text-primary)] font-medium shadow-lg transition-all disabled:opacity-50"                                        >                                            {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}                                            {isLoading ? 'Drafting...' : 'Generate AI Cover Letter'}                                        </button>                                        {coverLetter && (                                            <div className="mt-8 pt-8 border-t border-white/5">                                                <div className="flex items-center justify-between mb-4">                                                    <h4 className="text-sm font-semibold text-[var(--text-primary)]">Generated Draft ({coverLetter.word_count} words)</h4>                                                    <button onClick={() => copyToClipboard(coverLetter.cover_letter)} className="text-xs bg-white/5 hover:bg-white/10 text-[var(--text-primary)] px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors">                                                        <Copy className="w-3.5 h-3.5" /> Copy Letter                                                    </button>                                                </div>                                                <div className="bg-[#0A0D14] border border-white/5 rounded-xl p-6 text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap font-serif">                                                    {coverLetter.cover_letter}                                                </div>                                                <div className="mt-4 flex flex-wrap gap-2">                                                    {coverLetter.key_points.map((p, i) => (                                                        <span key={i} className="px-2 py-1 text-[10px] rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">{p}</span>                                                    ))}                                                </div>                                            </div>                                        )}                                    </MinimalCard>                                )}                            </motion.div>                        </AnimatePresence>                    </div>                </div>            </div>        </div>    );}
+'use client';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/lib/stores/authStore';
+import api from '@/src/lib/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import toast, { Toaster } from 'react-hot-toast';
+import {
+    FileText, Scan, PenLine, Sparkles, Clock, RefreshCw,
+    Upload, Target, CheckCircle2, X, ChevronRight, Copy, ListChecks
+} from 'lucide-react';
+const { apiClient, getServiceUrl } = api;
+interface KeywordMatch {
+    keyword: string;
+    found: boolean;
+    context?: string;
+}
+interface KeyStrengthMatch {
+    category: string;
+    match_percentage: number;
+    explanation: string;
+}
+interface ATSResult {
+    match_score: number;
+    matched_keywords: KeywordMatch[];
+    missing_keywords: string[];
+    suggestions: string[];
+    key_strength_matches?: KeyStrengthMatch[];
+    category_scores: Record<string, number>;
+}
+interface ResumeVersion {
+    id: string;
+    label: string;
+    is_master: boolean;
+    raw_text: string;
+    parsed_json: any;
+    file_name: string | null;
+    match_score: number | null;
+    version_number: number;
+    created_at: string;
+}
+interface ScanHistoryItem {
+    id: string;
+    date: string;
+    score: number;
+    resumeId: string;
+    resumeLabel: string;
+    jobRole: string;
+    jobDescriptionSnippet: string;
+    result: ATSResult;
+}
+function MinimalCard({ children, className = '', onClick }: { children: React.ReactNode, className?: string, onClick?: () => void }) {
+    return (
+        <div
+            onClick={onClick}
+            className={`bg-[#0A0D14]/80 backdrop-blur-md border border-[var(--card-border)] rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] ${className} ${onClick ? 'cursor-pointer hover:bg-[var(--card-bg)] transition-colors' : ''}`}
+        >
+            {children}
+        </div>
+    );
+}
+
+const TABS = [
+    { id: 'ats', label: 'ATS Analyzer', icon: Scan },
+    { id: 'history', label: 'Scan History', icon: Clock },
+    { id: 'cover', label: 'Cover Letter', icon: PenLine },
+];
+export default function ResumeBuilderPage() {
+    const router = useRouter();
+    const { isAuthenticated, isLoading: authLoading, accessToken, user } = useAuthStore();
+    const [activeTab, setActiveTab] = useState('ats');
+    const [isLoading, setIsLoading] = useState(false);
+    const [versions, setVersions] = useState<ResumeVersion[]>([]);
+    const [activeVersion, setActiveVersion] = useState<ResumeVersion | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const [jobDescription, setJobDescription] = useState('');
+    const [jobRole, setJobRole] = useState(''); 
+    
+    const [atsResult, setAtsResult] = useState<ATSResult | null>(null);
+    
+    const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>([]);
+    
+    const [selectedBullet, setSelectedBullet] = useState('');
+    const [rewrittenBullet, setRewrittenBullet] = useState<{ original: string; rewritten: string; improvement_notes: string } | null>(null);
+    const [companyName, setCompanyName] = useState('');
+    const [hiringManager, setHiringManager] = useState('');
+    const [coverLetterAngle, setCoverLetterAngle] = useState('balanced');
+    const [coverLetter, setCoverLetter] = useState<{ cover_letter: string; word_count: number; key_points: string[] } | null>(null);
+    useEffect(() => {
+        if (!authLoading && !isAuthenticated) {
+            router.push('/login');
+        }
+    }, [authLoading, isAuthenticated, router]);
+    useEffect(() => {
+        if (isAuthenticated && user) {
+            loadVersions();
+            const savedHistory = localStorage.getItem(`synthhire_ats_history_${user.id}`);
+            if (savedHistory) {
+                try { setScanHistory(JSON.parse(savedHistory)); } catch (e) { }
+            }
+        }
+    }, [isAuthenticated, user]);
+    const loadVersions = async () => {
+        try {
+            const headers = { Authorization: `Bearer ${accessToken}` };
+            const res = await apiClient.get(`${getServiceUrl('onboarding')}/onboarding/resume/versions`, { headers });
+            setVersions(res.data);
+            if (res.data.length > 0) {
+                const stillExists = activeVersion ? res.data.find((v: ResumeVersion) => v.id === activeVersion.id) : null;
+                if (!stillExists) {
+                    const master = res.data.find((v: ResumeVersion) => v.is_master) || res.data[0];
+                    setActiveVersion(master);
+                } else {
+                    setActiveVersion(stillExists);
+                }
+            } else {
+                setActiveVersion(null);
+            }
+        } catch { }
+    };
+    const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this resume?')) return;
+        try {
+            const headers = { Authorization: `Bearer ${accessToken}` };
+            await apiClient.delete(`${getServiceUrl('onboarding')}/onboarding/resume/versions/${id}`, { headers });
+            toast.success('Resume deleted successfully.');
+            setScanHistory(prev => {
+                const newHistory = prev.filter(h => h.resumeId !== id);
+                if (user) {
+                    localStorage.setItem(`synthhire_ats_history_${user.id}`, JSON.stringify(newHistory));
+                }
+                return newHistory;
+            });
+            await loadVersions();
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || 'Failed to delete resume');
+        }
+    };
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setIsUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('resume_file', file);
+            formData.append('file_name', file.name);
+            const headers = {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'multipart/form-data'
+            };
+            await apiClient.post(`${getServiceUrl('onboarding')}/onboarding/resume/upload`, formData, { headers });
+            toast.success('Resume uploaded successfully!');
+            await loadVersions(); 
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || 'Failed to upload resume');
+        } finally {
+            setIsUploading(false);
+            e.target.value = ''; 
+        }
+    };
+    
+    const handleAnalyze = async () => {
+        if (!activeVersion || !jobDescription.trim() || !jobRole.trim()) {
+            toast.error('Please select a resume, and provide a Job Role and Description.');
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const headers = { Authorization: `Bearer ${accessToken}` };
+            const res = await apiClient.post(`${getServiceUrl('resume')}/resume/analyze`, {
+                resume_text: activeVersion.raw_text,
+                job_description: jobDescription,
+            }, { headers });
+            const result = res.data;
+            setAtsResult(result);
+            const historyItem: ScanHistoryItem = {
+                id: crypto.randomUUID(),
+                date: new Date().toISOString(),
+                score: result.match_score,
+                resumeId: activeVersion.id,
+                resumeLabel: activeVersion.file_name || activeVersion.label,
+                jobRole: jobRole,
+                jobDescriptionSnippet: jobDescription.substring(0, 100) + '...',
+                result: result
+            };
+            const newHistory = [historyItem, ...scanHistory];
+            setScanHistory(newHistory);
+            if (user) {
+                localStorage.setItem(`synthhire_ats_history_${user.id}`, JSON.stringify(newHistory));
+            }
+            toast.success('Analysis complete!');
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || 'Analysis failed');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    const handleGenerateCover = async () => {
+        if (!jobDescription.trim() || !companyName.trim()) {
+            toast.error('Please provide company name and job description');
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const headers = { Authorization: `Bearer ${accessToken}` };
+            const res = await apiClient.post(`${getServiceUrl('resume')}/resume/cover-letter`, {
+                job_description: jobDescription,
+                company_name: companyName,
+                hiring_manager: hiringManager || undefined,
+                angle: coverLetterAngle,
+            }, { headers });
+            setCoverLetter(res.data);
+            toast.success('Cover letter generated!');
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || 'Generation failed');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    const handleRewriteBullet = async () => {
+        if (!selectedBullet.trim() || !jobDescription.trim()) {
+            toast.error('Select a bullet and provide a JD');
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const headers = { Authorization: `Bearer ${accessToken}` };
+            const res = await apiClient.post(`${getServiceUrl('resume')}/resume/rewrite-bullet`, {
+                original_bullet: selectedBullet,
+                job_description: jobDescription,
+                tone: 'professional' 
+            }, { headers });
+            setRewrittenBullet(res.data);
+            toast.success('Bullet rewritten!');
+        } catch (err: any) {
+            toast.error(err?.response?.data?.detail || 'Rewrite failed');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        toast.success('Copied to clipboard!');
+    };
+    const clearHistory = () => {
+        setScanHistory([]);
+        if (user) {
+            localStorage.removeItem(`synthhire_ats_history_${user.id}`);
+        }
+        toast.success("History cleared");
+    }
+    if (authLoading) return <div className="min-h-screen" />;
+    return (
+        <div className="min-h-screen font-sans selection:bg-indigo-500/30 overflow-x-hidden pt-12">
+            {}
+            <div className="fixed inset-0 pointer-events-none z-0">
+                <div className="absolute top-[10%] right-[10%] w-[50%] h-[50%] rounded-full bg-violet-600/5 blur-[150px]"></div>
+                <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-600/5 blur-[150px]"></div>
+            </div>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 pb-24">
+                <Toaster position="top-right" toastOptions={{
+                    style: { background: '#111827', color: '#F3F4F6', border: '1px solid rgba(255,255,255,0.1)' }
+                }} />
+                {}
+                <div className="mb-10">
+                    <h1 className="text-3xl md:text-5xl font-light tracking-tight text-[var(--text-primary)] mb-2">
+                        Resume <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">Builder</span>
+                    </h1>
+                    <p className="text-[var(--text-secondary)] text-lg font-light tracking-wide">
+                        Optimize your resume versions, analyze ATS fit, and track your history.
+                    </p>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    {}
+                    <div className="lg:col-span-4 space-y-6">
+                        <MinimalCard className="p-6">
+                            <h3 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-widest mb-4">Your Resumes</h3>
+                            {}
+                            <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                {versions.map(v => (
+                                    <div
+                                        key={v.id}
+                                        onClick={() => setActiveVersion(v)}
+                                        className={`p-4 rounded-xl cursor-pointer transition-all border relative group ${activeVersion?.id === v.id ? 'bg-violet-500/10 border-violet-500/30' : 'bg-white/5 border-transparent hover:border-white/10'}`}
+                                    >
+                                        <div className="flex items-center justify-between mb-1 pr-6">
+                                            <div className="flex items-center gap-2">
+                                                <FileText className={`w-4 h-4 ${activeVersion?.id === v.id ? 'text-violet-400' : 'text-[var(--text-muted)]'}`} />
+                                                <span className={`text-sm font-medium ${activeVersion?.id === v.id ? 'text-violet-200' : 'text-[var(--text-primary)]'}`}>
+                                                    {v.file_name || v.label}
+                                                </span>
+                                            </div>
+                                            {v.is_master && <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Master</span>}
+                                        </div>
+                                        <p className="text-[11px] text-[var(--text-muted)] mt-2 pl-6">
+                                            Uploaded: {new Date(v.created_at).toLocaleDateString()}
+                                        </p>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(v.id); }}
+                                            className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                                {versions.length === 0 && (
+                                    <p className="text-sm text-[var(--text-muted)] text-center py-6">No resumes uploaded yet.</p>
+                                )}
+                            </div>
+                            {}
+                            <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed ${isUploading ? 'border-violet-500/50 bg-violet-500/5' : 'border-white/10 hover:border-violet-500/30 hover:bg-[var(--card-bg)]'} rounded-xl cursor-pointer transition-all group relative overflow-hidden`}>
+                                {isUploading ? (
+                                    <div className="flex flex-col items-center text-violet-400">
+                                        <RefreshCw className="w-6 h-6 animate-spin mb-2" />
+                                        <span className="text-sm">Uploading...</span>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <Upload className="w-6 h-6 text-[var(--text-muted)] group-hover:text-violet-400 transition-colors mb-2" />
+                                        <span className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] font-medium">Upload New Resume</span>
+                                        <span className="text-[10px] text-[var(--text-muted)] mt-1">PDF, DOCX, TXT</span>
+                                    </>
+                                )}
+                                <input type="file" disabled={isUploading} accept=".pdf,.docx,.txt,.doc" onChange={handleFileUpload} className="hidden" />
+                            </label>
+                        </MinimalCard>
+                        {}
+                        <MinimalCard className="p-6">
+                            <h3 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <Target className="w-4 h-4 text-cyan-400" /> Target Job
+                            </h3>
+                            <div className="space-y-4">
+                                <input
+                                    value={jobRole}
+                                    onChange={(e) => setJobRole(e.target.value)}
+                                    placeholder="Target Role (e.g. Senior SWE)"
+                                    className="w-full bg-[#111622] border border-white/5 rounded-lg px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                                />
+                                <textarea
+                                    value={jobDescription}
+                                    onChange={(e) => setJobDescription(e.target.value)}
+                                    placeholder="Paste the full job description here..."
+                                    className="w-full h-48 bg-[#111622] border border-white/5 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)] placeholder-slate-500 resize-none focus:outline-none focus:border-cyan-500/50 transition-colors"
+                                />
+                            </div>
+                        </MinimalCard>
+                    </div>
+                    {}
+                    <div className="lg:col-span-8 space-y-6">
+                        {}
+                        <div className="flex gap-2 p-1 bg-[#111622]/50 border border-[var(--card-border)] rounded-xl inline-flex w-full overflow-x-auto custom-scrollbar">
+                            {TABS.map(tab => {
+                                const Icon = tab.icon;
+                                const isActive = activeTab === tab.id;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${isActive
+                                            ? 'bg-gradient-to-r from-violet-500/10 to-cyan-500/10 text-[var(--text-primary)] border border-white/10'
+                                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 border border-transparent'}`}
+                                    >
+                                        <Icon className="w-4 h-4" />
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeTab}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.2 }}
+                            >
+                                {}
+                                {activeTab === 'ats' && (
+                                    <div className="space-y-6">
+                                        <button
+                                            onClick={handleAnalyze} disabled={isLoading}
+                                            className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center gap-3 text-[var(--text-primary)] font-medium transition-all disabled:opacity-50"
+                                        >
+                                            {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Scan className="w-5 h-5 text-violet-400" />}
+                                            {isLoading ? 'Scanning Resume parameters...' : 'Run ATS Analysis'}
+                                        </button>
+                                        {atsResult && (
+                                            <MinimalCard className="p-6 md:p-8">
+                                                <div className="flex flex-col md:flex-row gap-8 items-start md:items-center border-b border-white/5 pb-8 mb-8">
+                                                    {}
+                                                    <div className="relative w-32 h-32 flex-shrink-0 mx-auto md:mx-0">
+                                                        <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
+                                                            <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
+                                                            <circle cx="40" cy="40" r="35" fill="none"
+                                                                stroke={atsResult.match_score >= 75 ? '#10B981' : atsResult.match_score >= 50 ? '#F59E0B' : '#EF4444'}
+                                                                strokeWidth="6" strokeLinecap="round" strokeDasharray="220"
+                                                                strokeDashoffset={220 - (220 * atsResult.match_score) / 100}
+                                                                className="transition-all duration-1000 ease-out"
+                                                            />
+                                                        </svg>
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                            <span className="text-3xl font-bold text-[var(--text-primary)]">{atsResult.match_score}</span>
+                                                            <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-widest">Match</span>
+                                                        </div>
+                                                    </div>
+                                                    {}
+                                                    <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                        {Object.entries(atsResult.category_scores || {}).map(([cat, score]) => (
+                                                            <div key={cat} className="bg-[var(--card-bg)] rounded-lg p-3 border border-[var(--card-border)]">
+                                                                <div className="flex justify-between text-xs mb-2">
+                                                                    <span className="text-[var(--text-primary)] capitalize font-medium">{cat.replace('_', ' ')}</span>
+                                                                    <span className={score >= 70 ? 'text-emerald-400' : score >= 40 ? 'text-yellow-400' : 'text-red-400'}>{score}%</span>
+                                                                </div>
+                                                                <div className="h-1.5 w-full bg-[#0A0D14] rounded-full overflow-hidden">
+                                                                    <div className={`h-full rounded-full ${score >= 70 ? 'bg-emerald-500' : score >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${score}%` }} />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                {}
+                                                {atsResult.key_strength_matches && atsResult.key_strength_matches.length > 0 && (
+                                                    <div className="mb-8 bg-[var(--card-bg)] border border-white/5 rounded-xl overflow-hidden">
+                                                        <h4 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-widest bg-[#0A0D14] p-4 border-b border-white/5 flex items-center gap-2">
+                                                            <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Key Strength Matches
+                                                        </h4>
+                                                        <div className="divide-y divide-white/5">
+                                                            {atsResult.key_strength_matches.map((ksm, i) => (
+                                                                <div key={i} className="p-4 flex flex-col md:flex-row gap-4 hover:bg-[var(--card-bg)] transition-colors">
+                                                                    <div className="w-full md:w-1/4">
+                                                                        <span className="text-sm font-semibold text-[var(--text-primary)] block">{ksm.category}</span>
+                                                                        <div className="flex items-center gap-1 mt-1">
+                                                                            {Array.from({ length: 5 }).map((_, idx) => (
+                                                                                <svg key={idx} className={`w-3 h-3 ${idx < Math.round(ksm.match_percentage / 20) ? 'text-yellow-400' : 'text-slate-600'}`} fill="currentColor" viewBox="0 0 20 20">
+                                                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                                                                </svg>
+                                                                            ))}
+                                                                            <span className="text-xs text-[var(--text-secondary)] ml-1">({ksm.match_percentage}%)</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex-1 text-sm text-[var(--text-primary)] leading-relaxed">
+                                                                        {ksm.explanation}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                    {}
+                                                    <div className="space-y-6">
+                                                        <div>
+                                                            <h4 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Matched Keywords
+                                                            </h4>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {atsResult.matched_keywords.filter(k => k.found).map((k, i) => (
+                                                                    <span key={i} className="px-2.5 py-1 text-xs rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                                                                        {k.keyword}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                        {atsResult.missing_keywords.length > 0 && (
+                                                            <div>
+                                                                <h4 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                                    <X className="w-4 h-4 text-red-400" /> Missing Keywords
+                                                                </h4>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {atsResult.missing_keywords.map((k, i) => (
+                                                                        <span key={i} className="px-2.5 py-1 text-xs rounded-md bg-red-500/10 text-red-300 border border-red-500/20">
+                                                                            {k}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {}
+                                                    <div className="space-y-6 bg-[var(--card-bg)] p-6 rounded-xl border border-white/5">
+                                                        <div>
+                                                            <h4 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                                <ListChecks className="w-4 h-4 text-blue-400" /> 🚀 How to Strengthen Your Fit
+                                                            </h4>
+                                                            <ul className="space-y-3">
+                                                                {atsResult.suggestions.map((s, i) => (
+                                                                    <li key={i} className="text-sm text-[var(--text-primary)] flex items-start gap-2">
+                                                                        <span className="text-blue-500 opacity-50 mt-1">•</span> {s}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                        {}
+                                                        <div className="pt-6 border-t border-white/5">
+                                                            <h4 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                                <PenLine className="w-4 h-4 text-violet-400" /> Bullet Optimizer
+                                                            </h4>
+                                                            <textarea
+                                                                value={selectedBullet} onChange={(e) => setSelectedBullet(e.target.value)}
+                                                                placeholder="Paste a weak bullet point to AI-optimize for this JD..."
+                                                                className="w-full h-20 bg-[#0A0D14] border border-white/5 rounded-lg px-3 py-2 text-xs text-[var(--text-primary)] placeholder-slate-600 resize-none focus:outline-none focus:border-violet-500/50 mb-2"
+                                                            />
+                                                            <button
+                                                                onClick={handleRewriteBullet} disabled={isLoading || !selectedBullet}
+                                                                className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-[var(--text-primary)] transition-colors"
+                                                            >
+                                                                Rewrite Bullet
+                                                            </button>
+                                                            {rewrittenBullet && (
+                                                                <div className="mt-4 bg-violet-500/5 border border-violet-500/10 rounded-lg p-3 space-y-3">
+                                                                    <div><p className="text-[10px] text-red-400 uppercase font-semibold">Original</p><p className="text-xs text-[var(--text-secondary)] line-through opacity-70">{rewrittenBullet.original}</p></div>
+                                                                    <div><p className="text-[10px] text-emerald-400 uppercase font-semibold">Rewritten</p><p className="text-sm text-[var(--text-primary)] font-medium">{rewrittenBullet.rewritten}</p></div>
+                                                                    <div className="flex justify-between items-center"><p className="text-[10px] text-violet-300 italic flex-1">{rewrittenBullet.improvement_notes}</p><button onClick={() => copyToClipboard(rewrittenBullet.rewritten)} className="p-1.5 hover:bg-white/10 rounded flex-shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"><Copy className="w-3.5 h-3.5" /></button></div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </MinimalCard>
+                                        )}
+                                        {}
+                                        {!atsResult && !isLoading && (
+                                            <div className="py-20 flex flex-col items-center justify-center text-center opacity-40">
+                                                <Scan className="w-16 h-16 mb-4" />
+                                                <p className="text-lg font-medium">No Analysis Data</p>
+                                                <p className="text-sm">Select a Resume and Job Description to begin</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {}
+                                {activeTab === 'history' && (
+                                    <MinimalCard className="p-6">
+                                        <div className="flex items-center justify-between mb-6">
+                                            <h3 className="text-sm font-semibold text-[var(--text-primary)] uppercase tracking-widest">Local Scan History</h3>
+                                            {scanHistory.length > 0 && <button onClick={clearHistory} className="text-xs text-red-400 hover:text-red-300">Clear History</button>}
+                                        </div>
+                                        <div className="space-y-4">
+                                            {scanHistory.map((item) => (
+                                                <div key={item.id} className="flex flex-col md:flex-row gap-4 p-4 rounded-xl bg-[var(--card-bg)] border border-white/5 hover:bg-[var(--card-bg)] transition-colors relative overflow-hidden group">
+                                                    {}
+                                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 flex-col
+                                                        ${item.score >= 75 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                                            item.score >= 50 ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
+                                                                'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                                        <span className="text-xl font-bold leading-none mb-1">{item.score}</span>
+                                                        <span className="text-[9px] uppercase font-bold tracking-widest">Score</span>
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <h4 className="text-base font-semibold text-[var(--text-primary)] truncate pr-4">{item.jobRole || 'Unknown Role'}</h4>
+                                                            <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{new Date(item.date).toLocaleDateString()}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)] mb-2">
+                                                            <FileText className="w-3.5 h-3.5" /> {item.resumeLabel}
+                                                        </div>
+                                                        <p className="text-xs text-[var(--text-muted)] italic line-clamp-1 border-l-2 border-white/10 pl-2">"{item.jobDescriptionSnippet}"</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {scanHistory.length === 0 && (
+                                                <div className="py-12 flex flex-col items-center justify-center text-center opacity-40">
+                                                    <Clock className="w-12 h-12 mb-3" />
+                                                    <p className="text-sm">Your past ATS scan results will appear here.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </MinimalCard>
+                                )}
+                                {}
+                                {activeTab === 'cover' && (
+                                    <MinimalCard className="p-6 md:p-8">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">Company Name</label>
+                                                    <input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Acme Corp" className="w-full bg-[#111622] border border-white/5 rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/50" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">Hiring Manager</label>
+                                                    <input value={hiringManager} onChange={e => setHiringManager(e.target.value)} placeholder="Optional" className="w-full bg-[#111622] border border-white/5 rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-cyan-500/50" />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-widest">Letter Angle</label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {['balanced', 'technical', 'leadership', 'passion'].map(a => (
+                                                        <button
+                                                            key={a} onClick={() => setCoverLetterAngle(a)}
+                                                            className={`px-3 py-2 rounded-lg text-xs font-medium capitalize transition-colors ${coverLetterAngle === a ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50' : 'bg-[#111622] text-[var(--text-secondary)] border border-white/5 hover:border-white/20'}`}
+                                                        >
+                                                            {a}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={handleGenerateCover} disabled={isLoading}
+                                            className="w-full py-3 bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 rounded-xl flex items-center justify-center gap-2 text-[var(--text-primary)] font-medium shadow-lg transition-all disabled:opacity-50"
+                                        >
+                                            {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                                            {isLoading ? 'Drafting...' : 'Generate AI Cover Letter'}
+                                        </button>
+                                        {coverLetter && (
+                                            <div className="mt-8 pt-8 border-t border-white/5">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <h4 className="text-sm font-semibold text-[var(--text-primary)]">Generated Draft ({coverLetter.word_count} words)</h4>
+                                                    <button onClick={() => copyToClipboard(coverLetter.cover_letter)} className="text-xs bg-white/5 hover:bg-white/10 text-[var(--text-primary)] px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors">
+                                                        <Copy className="w-3.5 h-3.5" /> Copy Letter
+                                                    </button>
+                                                </div>
+                                                <div className="bg-[#0A0D14] border border-white/5 rounded-xl p-6 text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap font-serif">
+                                                    {coverLetter.cover_letter}
+                                                </div>
+                                                <div className="mt-4 flex flex-wrap gap-2">
+                                                    {coverLetter.key_points.map((p, i) => (
+                                                        <span key={i} className="px-2 py-1 text-[10px] rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">{p}</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </MinimalCard>
+                                )}
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

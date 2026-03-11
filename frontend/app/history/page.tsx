@@ -1,1 +1,182 @@
-'use client';import { useEffect, useState } from 'react';import { useAuthStore } from '@/lib/stores/authStore';import api from '@/src/lib/api';import { Clock, Calendar, ChevronRight, Search } from 'lucide-react';import GlassCard from '@/components/ui/GlassCard';import CyberButton from '@/components/ui/CyberButton';import { motion } from 'framer-motion';import { useRouter } from 'next/navigation';const { apiClient, getServiceUrl } = api;interface Session {    id: string;    session_type: string;    persona_type: string;    status: string;    overall_score?: number;    created_at: string;    duration_seconds?: number;    target_role?: string;    company_slug?: string;    difficulty_level?: string;}export default function HistoryPage() {    const { user, isAuthenticated } = useAuthStore();    const router = useRouter();    const [sessions, setSessions] = useState<Session[]>([]);    const [isLoading, setIsLoading] = useState(true);    const [searchTerm, setSearchTerm] = useState('');    useEffect(() => {        if (isAuthenticated) {            loadSessions();        }    }, [isAuthenticated]);    const loadSessions = async () => {        try {            const sessionUrl = getServiceUrl('session');            const response = await apiClient.get(`${sessionUrl}/sessions?page=1&page_size=50`);            setSessions(response.data.sessions || []);            setIsLoading(false);        } catch (error) {            console.error('Failed to load sessions:', error);            setIsLoading(false);        }    };    const formatDate = (dateString: string) => {        return new Date(dateString).toLocaleDateString('en-US', {            month: 'short',            day: 'numeric',            year: 'numeric',            hour: '2-digit',            minute: '2-digit'        });    };    const filteredSessions = sessions.filter(session =>        session.session_type.toLowerCase().includes(searchTerm.toLowerCase()) ||        session.persona_type.toLowerCase().includes(searchTerm.toLowerCase())    );    const container = {        hidden: { opacity: 0 },        show: {            opacity: 1,            transition: { staggerChildren: 0.05 }        }    };    const item = {        hidden: { opacity: 0, y: 10 },        show: { opacity: 1, y: 0 }    };    return (        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">            <motion.div                initial={{ opacity: 0, y: -20 }}                animate={{ opacity: 1, y: 0 }}                className="flex flex-col md:flex-row justify-between items-end gap-4"            >                <div>                    <h1 className="text-3xl font-bold text-gradient mb-2">Interview History</h1>                    <p className="text-slate-400">Review your past performance and track your progress.</p>                </div>                <div className="relative w-full md:w-64">                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />                    <input                        type="text"                        placeholder="Search sessions..."                        value={searchTerm}                        onChange={(e) => setSearchTerm(e.target.value)}                        className="w-full pl-10 pr-4 py-2 glass-input text-sm"                    />                </div>            </motion.div>            {isLoading ? (                <div className="flex justify-center py-20">                    <div className="w-10 h-10 border-2 border-cyber-teal-500 border-t-transparent rounded-full animate-spin"></div>                </div>            ) : filteredSessions.length === 0 ? (                <GlassCard className="text-center py-20 border-dashed border-2 border-slate-700/50">                    <Clock className="w-12 h-12 text-slate-600 mx-auto mb-4" />                    <h3 className="text-xl font-medium text-white mb-2">No history found</h3>                    <p className="text-slate-400">Start your first interview session to see it here.</p>                </GlassCard>            ) : (                <motion.div                    variants={container}                    initial="hidden"                    animate="show"                    className="grid gap-4"                >                    {filteredSessions.map((session) => (                        <motion.div variants={item} key={session.id}>                            <GlassCard className="p-0 hover:bg-cyber-slate-800/50 transition-colors group cursor-pointer overflow-hidden">                                <div                                    className="p-6 flex flex-col md:flex-row items-center gap-6"                                    onClick={() => session.status === 'completed' && router.push(`/interview/report/${session.id}`)}                                >                                    {}                                    <div className="flex-shrink-0">                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold border border-white/5 ${session.status === 'completed'                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'                                            : 'bg-slate-700/50 text-slate-400'                                            }`}>                                            {session.overall_score ? Math.round(session.overall_score) : '-'}                                        </div>                                    </div>                                    {}                                    <div className="flex-grow min-w-0 text-center md:text-left">                                        <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">                                            <h3 className="text-lg font-bold text-white capitalize group-hover:text-cyber-teal-400 transition-colors">                                                {session.target_role || session.session_type.replace('_', ' ')}                                            </h3>                                            <span className="hidden md:inline text-slate-600">•</span>                                            <span className="text-sm text-cyber-purple-400 font-medium capitalize">                                                {session.company_slug?.replace('-', ' ') || session.persona_type.replace('_', ' ')}                                            </span>                                            {session.difficulty_level && (                                                <>                                                    <span className="hidden md:inline text-slate-600">•</span>                                                    <span className="text-xs uppercase tracking-wider font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">                                                        {session.difficulty_level}                                                    </span>                                                </>                                            )}                                        </div>                                        <div className="flex items-center justify-center md:justify-start gap-4 text-sm text-slate-400">                                            <div className="flex items-center gap-1">                                                <Calendar className="w-4 h-4" />                                                <span>{formatDate(session.created_at)}</span>                                            </div>                                            <div className="flex items-center gap-1">                                                <div className={`w-2 h-2 rounded-full ${session.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'                                                    }`}></div>                                                <span className="capitalize">{session.status}</span>                                            </div>                                        </div>                                    </div>                                    {}                                    <div className="flex-shrink-0">                                        <CyberButton                                            variant="ghost"                                            className="group-hover:translate-x-1"                                            disabled={session.status !== 'completed'}                                        >                                            {session.status === 'completed' ? 'View Report' : 'In Progress'} <ChevronRight className="w-4 h-4 ml-1" />                                        </CyberButton>                                    </div>                                </div>                                {}                                {session.overall_score !== undefined && (                                    <div className="h-1 w-full bg-cyber-slate-900">                                        <div                                            className="h-full bg-gradient-to-r from-cyber-teal-500 to-cyber-purple-500"                                            style={{ width: `${session.overall_score}%` }}                                        ></div>                                    </div>                                )}                            </GlassCard>                        </motion.div>                    ))}                </motion.div>            )}        </div>    );}
+'use client';
+import { useEffect, useState } from 'react';
+import { useAuthStore } from '@/lib/stores/authStore';
+import api from '@/src/lib/api';
+import { Clock, Calendar, ChevronRight, Search } from 'lucide-react';
+import GlassCard from '@/components/ui/GlassCard';
+import CyberButton from '@/components/ui/CyberButton';
+import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+const { apiClient, getServiceUrl } = api;
+interface Session {
+    id: string;
+    session_type: string;
+    persona_type: string;
+    status: string;
+    overall_score?: number;
+    created_at: string;
+    duration_seconds?: number;
+    target_role?: string;
+    company_slug?: string;
+    difficulty_level?: string;
+}
+export default function HistoryPage() {
+    const { user, isAuthenticated } = useAuthStore();
+    const router = useRouter();
+    const [sessions, setSessions] = useState<Session[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    useEffect(() => {
+        if (isAuthenticated) {
+            loadSessions();
+        }
+    }, [isAuthenticated]);
+    const loadSessions = async () => {
+        try {
+            const sessionUrl = getServiceUrl('session');
+            const response = await apiClient.get(`${sessionUrl}/sessions?page=1&page_size=50`);
+            setSessions(response.data.sessions || []);
+            setIsLoading(false);
+        } catch (error) {
+            console.error('Failed to load sessions:', error);
+            setIsLoading(false);
+        }
+    };
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+    const filteredSessions = sessions.filter(session =>
+        session.session_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        session.persona_type.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    const container = {
+        hidden: { opacity: 0 },
+        show: {
+            opacity: 1,
+            transition: { staggerChildren: 0.05 }
+        }
+    };
+    const item = {
+        hidden: { opacity: 0, y: 10 },
+        show: { opacity: 1, y: 0 }
+    };
+    return (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+            <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col md:flex-row justify-between items-end gap-4"
+            >
+                <div>
+                    <h1 className="text-3xl font-bold text-gradient mb-2">Interview History</h1>
+                    <p className="text-slate-400">Review your past performance and track your progress.</p>
+                </div>
+                <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                        type="text"
+                        placeholder="Search sessions..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 glass-input text-sm"
+                    />
+                </div>
+            </motion.div>
+            {isLoading ? (
+                <div className="flex justify-center py-20">
+                    <div className="w-10 h-10 border-2 border-cyber-teal-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            ) : filteredSessions.length === 0 ? (
+                <GlassCard className="text-center py-20 border-dashed border-2 border-slate-700/50">
+                    <Clock className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <h3 className="text-xl font-medium text-white mb-2">No history found</h3>
+                    <p className="text-slate-400">Start your first interview session to see it here.</p>
+                </GlassCard>
+            ) : (
+                <motion.div
+                    variants={container}
+                    initial="hidden"
+                    animate="show"
+                    className="grid gap-4"
+                >
+                    {filteredSessions.map((session) => (
+                        <motion.div variants={item} key={session.id}>
+                            <GlassCard className="p-0 hover:bg-cyber-slate-800/50 transition-colors group cursor-pointer overflow-hidden">
+                                <div
+                                    className="p-6 flex flex-col md:flex-row items-center gap-6"
+                                    onClick={() => session.status === 'completed' && router.push(`/interview/report/${session.id}`)}
+                                >
+                                    {}
+                                    <div className="flex-shrink-0">
+                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold border border-white/5 ${session.status === 'completed'
+                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                            : 'bg-slate-700/50 text-slate-400'
+                                            }`}>
+                                            {session.overall_score ? Math.round(session.overall_score) : '-'}
+                                        </div>
+                                    </div>
+                                    {}
+                                    <div className="flex-grow min-w-0 text-center md:text-left">
+                                        <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">
+                                            <h3 className="text-lg font-bold text-white capitalize group-hover:text-cyber-teal-400 transition-colors">
+                                                {session.target_role || session.session_type.replace('_', ' ')}
+                                            </h3>
+                                            <span className="hidden md:inline text-slate-600">•</span>
+                                            <span className="text-sm text-cyber-purple-400 font-medium capitalize">
+                                                {session.company_slug?.replace('-', ' ') || session.persona_type.replace('_', ' ')}
+                                            </span>
+                                            {session.difficulty_level && (
+                                                <>
+                                                    <span className="hidden md:inline text-slate-600">•</span>
+                                                    <span className="text-xs uppercase tracking-wider font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                                                        {session.difficulty_level}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-center md:justify-start gap-4 text-sm text-slate-400">
+                                            <div className="flex items-center gap-1">
+                                                <Calendar className="w-4 h-4" />
+                                                <span>{formatDate(session.created_at)}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <div className={`w-2 h-2 rounded-full ${session.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'
+                                                    }`}></div>
+                                                <span className="capitalize">{session.status}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {}
+                                    <div className="flex-shrink-0">
+                                        <CyberButton
+                                            variant="ghost"
+                                            className="group-hover:translate-x-1"
+                                            disabled={session.status !== 'completed'}
+                                        >
+                                            {session.status === 'completed' ? 'View Report' : 'In Progress'} <ChevronRight className="w-4 h-4 ml-1" />
+                                        </CyberButton>
+                                    </div>
+                                </div>
+                                {}
+                                {session.overall_score !== undefined && (
+                                    <div className="h-1 w-full bg-cyber-slate-900">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-cyber-teal-500 to-cyber-purple-500"
+                                            style={{ width: `${session.overall_score}%` }}
+                                        ></div>
+                                    </div>
+                                )}
+                            </GlassCard>
+                        </motion.div>
+                    ))}
+                </motion.div>
+            )}
+        </div>
+    );
+}

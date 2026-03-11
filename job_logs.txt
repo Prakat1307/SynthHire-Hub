@@ -1,0 +1,93 @@
+INFO:     Will watch for changes in these directories: ['/app']
+INFO:     Uvicorn running on http://0.0.0.0:8016 (Press CTRL+C to quit)
+INFO:     Started reloader process [1] using WatchFiles
+INFO:     Started server process [8]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+Traceback (most recent call last):
+  File "/usr/local/bin/uvicorn", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1485, in __call__
+    return self.main(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1406, in main
+    rv = self.invoke(ctx)
+         ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1269, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/click/core.py", line 824, in invoke
+    return callback(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 410, in main
+    run(
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 572, in run
+    ChangeReload(config, target=server.run, sockets=[sock]).run()
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/supervisors/basereload.py", line 52, in run
+    for changes in self:
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/supervisors/basereload.py", line 71, in __next__
+    return self.should_restart()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/supervisors/watchfilesreload.py", line 84, in should_restart
+    changes = next(self.watcher)
+              ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/watchfiles/main.py", line 130, in watch
+    raw_changes = watcher.watch(debounce, step, rust_timeout, stop_event)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_rust_notify.WatchfilesRustInternalError: error in underlying watcher: Cannot allocate memory (os error 12)
+INFO:     Will watch for changes in these directories: ['/app']
+INFO:     Uvicorn running on http://0.0.0.0:8016 (Press CTRL+C to quit)
+INFO:     Started reloader process [1] using WatchFiles
+INFO:     Started server process [8]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+[GeminiRotator] Loaded 4 API key(s) into rotation pool
+Warning: Could not initialize DB tables on startup: (psycopg2.OperationalError) could not translate host name "postgres" to address: Name or service not known
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Tables may already exist. Continuing...
+[ResumeExtract] Extracted 3802 chars from PDF (1 pages)
+INFO:     172.18.0.10:60056 - "POST /jobs/extract-resume HTTP/1.0" 200 OK
+INFO:httpx:HTTP Request: GET https://jsearch.p.rapidapi.com/search?query=machine%20learning%20in%20pune&page=1&num_pages=1 "HTTP/1.1 200 OK"
+[JobAggregation] JSearch response status: 200
+[JobAggregation] JSearch returned 10 items
+[JobAggregation] JSearch returned 10 jobs
+INFO:     172.18.0.10:60064 - "POST /jobs/search/aggregate HTTP/1.0" 200 OK
+[ResumeExtract] Extracted 3802 chars from PDF (1 pages)
+INFO:     172.18.0.10:46734 - "POST /jobs/extract-resume HTTP/1.0" 200 OK
+[MatchEngine] Using resume text from request (3802 chars)
+[MatchEngine] Match evaluation failed: Invalid format specifier ' <integer 0-100>,
+            "key_strength_matches": ["Matched Skill/Experience 1", "Matched Skill/Experience 2", "..."],
+            "missing_critical_skills": ["Gap 1", "Gap 2", "..."],
+            "brief_summary": "2-3 sentence explanation of the match, highlighting what makes this candidate suitable or what they need to improve"
+        ' for object of type 'str'
+INFO:     172.18.0.10:46738 - "POST /jobs/calculate-match HTTP/1.0" 200 OK
+[MatchEngine] Using resume text from request (3802 chars)
+[MatchEngine] Match evaluation failed: Invalid format specifier ' <integer 0-100>,
+            "key_strength_matches": ["Matched Skill/Experience 1", "Matched Skill/Experience 2", "..."],
+            "missing_critical_skills": ["Gap 1", "Gap 2", "..."],
+            "brief_summary": "2-3 sentence explanation of the match, highlighting what makes this candidate suitable or what they need to improve"
+        ' for object of type 'str'
+INFO:     172.18.0.10:58798 - "POST /jobs/calculate-match HTTP/1.0" 200 OK
+[MatchEngine] Using resume text from request (3802 chars)
+[MatchEngine] Match evaluation failed: Invalid format specifier ' <integer 0-100>,
+            "key_strength_matches": ["Matched Skill/Experience 1", "Matched Skill/Experience 2", "..."],
+            "missing_critical_skills": ["Gap 1", "Gap 2", "..."],
+            "brief_summary": "2-3 sentence explanation of the match, highlighting what makes this candidate suitable or what they need to improve"
+        ' for object of type 'str'
+INFO:     172.18.0.10:58808 - "POST /jobs/calculate-match HTTP/1.0" 200 OK
+[MatchEngine] Using resume text from request (3802 chars)
+[MatchEngine] Match evaluation failed: Invalid format specifier ' <integer 0-100>,
+            "key_strength_matches": ["Matched Skill/Experience 1", "Matched Skill/Experience 2", "..."],
+            "missing_critical_skills": ["Gap 1", "Gap 2", "..."],
+            "brief_summary": "2-3 sentence explanation of the match, highlighting what makes this candidate suitable or what they need to improve"
+        ' for object of type 'str'
+INFO:     172.18.0.10:58818 - "POST /jobs/calculate-match HTTP/1.0" 200 OK
+[MatchEngine] Using resume text from request (3802 chars)
+[MatchEngine] Match evaluation failed: Invalid format specifier ' <integer 0-100>,
+            "key_strength_matches": ["Matched Skill/Experience 1", "Matched Skill/Experience 2", "..."],
+            "missing_critical_skills": ["Gap 1", "Gap 2", "..."],
+            "brief_summary": "2-3 sentence explanation of the match, highlighting what makes this candidate suitable or what they need to improve"
+        ' for object of type 'str'
+INFO:     172.18.0.10:58832 - "POST /jobs/calculate-match HTTP/1.0" 200 OK

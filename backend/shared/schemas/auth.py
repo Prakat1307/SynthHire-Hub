@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
@@ -21,14 +20,14 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     is_email_verified: bool
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str = 'bearer'
     expires_in: int = 900
     user: UserResponse
 
