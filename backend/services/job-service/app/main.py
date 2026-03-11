@@ -443,12 +443,12 @@ async def calculate_ai_match(
         CRITICAL: Output strictly VALID JSON ONLY. No markdown, no code blocks, no extra text.
         
         Output format:
-        { 
+        {{ 
             "match_score": <integer 0-100>,
             "key_strength_matches": ["Matched Skill/Experience 1", "Matched Skill/Experience 2", "..."],
             "missing_critical_skills": ["Gap 1", "Gap 2", "..."],
             "brief_summary": "2-3 sentence explanation of the match, highlighting what makes this candidate suitable or what they need to improve"
-        } 
+        }} 
         
         --- JOB POSTING ---
         Title: {request.job_title}

@@ -1,1 +1,1094 @@
-"use client"import React, { useState, useEffect, useRef } from 'react'import { motion, AnimatePresence } from 'framer-motion'import {    Search,    MapPin,    Briefcase,    Globe,    DollarSign,    Clock,    Bookmark,    ChevronDown,    LayoutDashboard,    Kanban,    CheckCircle2,    XCircle,    AlertCircle,    ExternalLink,    Loader2,    SlidersHorizontal,    BookmarkCheck,    Play,    Trophy,    Star,    Upload,    FileText,    Trash2} from 'lucide-react'import GlassCard from '@/components/ui/GlassCard'import CyberButton from '@/components/ui/CyberButton'import { useAuthStore } from '@/lib/stores/authStore'import toast from 'react-hot-toast'import Link from 'next/link'import { usePathname } from 'next/navigation'interface Job {    job_id: string;    source: string;    title: string;    company: string;    company_logo_url?: string;    location?: string;    is_remote: boolean;    salary_min?: number;    salary_max?: number;    salary_currency?: string;    description?: string;    required_skills: string[];    experience_level?: string;    apply_url?: string;    posted_date?: string;    match_score?: number;    match_details?: any;}export default function JobsPortal() {    const { user } = useAuthStore()    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;    const pathname = usePathname()    const [query, setQuery] = useState('')    const [location, setLocation] = useState('')    const [isRemoteOnly, setIsRemoteOnly] = useState(false)    const [isLoading, setIsLoading] = useState(false)    const [jobs, setJobs] = useState<Job[]>([])    const [selectedJob, setSelectedJob] = useState<Job | null>(null)    const [applyingJobId, setApplyingJobId] = useState<string | null>(null)    const [showPreApplyModal, setShowPreApplyModal] = useState(false)    const [jobToApply, setJobToApply] = useState<Job | null>(null)    // Resume upload state    const [resumeText, setResumeText] = useState<string>('')    const [resumeFileName, setResumeFileName] = useState<string>('')    const [isProcessingResume, setIsProcessingResume] = useState(false)    const fileInputRef = useRef<HTMLInputElement>(null)    // Load saved resume from localStorage on mount    useEffect(() => {        const savedResume = localStorage.getItem('jobs_resume_text')        const savedName = localStorage.getItem('jobs_resume_filename')        if (savedResume) setResumeText(savedResume)        if (savedName) setResumeFileName(savedName)    }, [])    const [filterFullTime, setFilterFullTime] = useState(false)    const [filterContract, setFilterContract] = useState(false)    const [filterRemote, setFilterRemote] = useState(false)    const [filterMatchScore, setFilterMatchScore] = useState<'all' | '80' | '70'>('all')    const filteredJobs = jobs.filter(job => {        const anyTypeSelected = filterFullTime || filterContract || filterRemote        if (anyTypeSelected) {            const titleLower = (job.title || '').toLowerCase()            const descLower = (job.description || '').toLowerCase()            const isRemoteJob = job.is_remote || titleLower.includes('remote') || descLower.includes('remote')            const isContractJob = titleLower.includes('contract') || titleLower.includes('freelance') || descLower.includes('contract')            const isFullTimeJob = !isContractJob             let matches = false            if (filterRemote && isRemoteJob) matches = true            if (filterContract && isContractJob) matches = true            if (filterFullTime && isFullTimeJob) matches = true            if (!matches) return false        }        if (filterMatchScore === '80') {            return job.match_score !== undefined && job.match_score >= 80        }        if (filterMatchScore === '70') {            return job.match_score !== undefined && job.match_score >= 70        }        return true    })    const clearFilters = () => {        setFilterFullTime(false)        setFilterContract(false)        setFilterRemote(false)        setFilterMatchScore('all')    }    const handleSearch = async (e?: React.FormEvent) => {        if (e) e.preventDefault()        if (!query) return        setIsLoading(true)        setJobs([])        setSelectedJob(null)        try {            const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888'            const response = await fetch(`${apiBase}/api/jobs/jobs/search/aggregate`, {                method: 'POST',                headers: {                    'Content-Type': 'application/json',                    'Authorization': `Bearer ${token}`                },                body: JSON.stringify({                    query: query,                    location: location || null,                    remote_only: isRemoteOnly,                    page: 1                })            })            if (!response.ok) throw new Error('Failed to fetch jobs')            const data = await response.json()            setJobs(data)            if (data.length > 0) {                setSelectedJob(data[0])                const jobsToScore = data.slice(0, 5)                jobsToScore.forEach((job: Job, index: number) => {                    setTimeout(() => fetchMatchScore(job), index * 2500)                })            }        } catch (error) {            console.error(error)            toast.error("Failed to aggregate jobs from providers.")        } finally {            setIsLoading(false)        }    }    const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {        const file = e.target.files?.[0]        if (!file) return        setIsProcessingResume(true)        const fileName = file.name        try {            let text = ''            if (file.name.endsWith('.txt') || file.name.endsWith('.md')) {                text = await file.text()            } else {                const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888'                const formData = new FormData()                formData.append('file', file)                const response = await fetch(`${apiBase}/api/jobs/jobs/extract-resume`, {                    method: 'POST',                    body: formData                })                if (!response.ok) {                    throw new Error(`Server error: ${response.status}`)                }                const result = await response.json()                if (!result.success) {                    toast.error(result.error || 'Could not extract text from this file.')                    setIsProcessingResume(false)                    return                }                text = result.text                console.log(`[ResumeUpload] Backend extracted ${result.chars} chars from ${fileName}`)            }            if (text.trim().length < 20) {                toast.error('Could not extract enough text from this file. Try a different format.')                setIsProcessingResume(false)                return            }            setResumeText(text.trim())            setResumeFileName(fileName)            localStorage.setItem('jobs_resume_text', text.trim())            localStorage.setItem('jobs_resume_filename', fileName)            toast.success(`Resume "${fileName}" uploaded! AI Match Scoring is now active.`)            if (jobs.length > 0) {                jobs.slice(0, 5).forEach((job, index) => {                    setTimeout(() => fetchMatchScore(job, text.trim()), index * 2500)                })            }        } catch (error) {            console.error('Resume upload error:', error)            toast.error('Failed to process resume file. Please try again.')        } finally {            setIsProcessingResume(false)            if (fileInputRef.current) fileInputRef.current.value = ''        }    }    const removeResume = () => {        setResumeText('')        setResumeFileName('')        localStorage.removeItem('jobs_resume_text')        localStorage.removeItem('jobs_resume_filename')        setJobs(prev => prev.map(j => ({ ...j, match_score: undefined, match_details: undefined })))        toast.success('Resume removed')    }    const fetchMatchScore = async (job: Job, overrideResumeText?: string) => {        const textToUse = overrideResumeText || resumeText        if (!textToUse) {            setJobs(prevJobs => prevJobs.map(p =>                p.job_id === job.job_id                    ? { ...p, match_score: -1, match_details: { error: 'no_resume' } }                    : p            ))            return        }        try {            const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888'            const response = await fetch(`${apiBase}/api/jobs/jobs/calculate-match`, {                method: 'POST',                headers: {                    'Content-Type': 'application/json',                    'Authorization': `Bearer ${token}`                },                body: JSON.stringify({                    job_description: job.description || job.title,                    job_title: job.title,                    required_skills: job.required_skills,                    resume_text: textToUse                })            })            if (response.ok) {                const matchData = await response.json()                setJobs(prevJobs => prevJobs.map(p =>                    p.job_id === job.job_id                        ? { ...p, match_score: matchData.match_score, match_details: matchData.details }                        : p                ))            } else {                setJobs(prevJobs => prevJobs.map(p =>                    p.job_id === job.job_id                        ? { ...p, match_score: -1, match_details: { error: 'api_error' } }                        : p                ))            }        } catch (error) {            console.error(`Failed to fetch match score for ${job.job_id}`, error)            setJobs(prevJobs => prevJobs.map(p =>                p.job_id === job.job_id                    ? { ...p, match_score: -1, match_details: { error: 'network_error' } }                    : p            ))        }    }    const initiateAutoApply = (job: Job) => {        if (!user) {            toast.error("Please log in to auto-apply to jobs")            return        }        setJobToApply(job)        setShowPreApplyModal(true)    }    const confirmAutoApply = async () => {        if (!jobToApply) return        setShowPreApplyModal(false)        setApplyingJobId(jobToApply.job_id)        const applyToast = toast.loading(`Starting AI Auto-Apply for ${jobToApply.company}...`)        try {            const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888'            const response = await fetch(`${apiBase}/api/jobs/jobs/auto-apply`, {                method: 'POST',                headers: {                    'Content-Type': 'application/json',                    'Authorization': `Bearer ${token}`                },                body: JSON.stringify({                    job_id: jobToApply.job_id,                    job_url: jobToApply.apply_url || "https://example.com/apply",                    require_manual_review: false                })            })            const result = await response.json()            if (response.ok && result.status === 'success') {                toast.success(                    <div>                        <p className="font-semibold">Auto-Apply Successful!</p>                        <p className="text-xs mt-1">AI successfully filled and submitted the application to {jobToApply.company}.</p>                    </div>,                    { id: applyToast, duration: 5000 }                )            } else {                toast.error(result.error || result.message || "Failed to auto-apply. Try manually.", { id: applyToast })            }        } catch (error) {            console.error("Auto-apply error:", error)            toast.error("Network error. Could not contact Auto-Apply engine.", { id: applyToast })        } finally {            setApplyingJobId(null)            setJobToApply(null)        }    }    const renderJobCard = (job: Job & { match_details?: any }) => {        const isSelected = selectedJob?.job_id === job.job_id        const hasScore = job.match_score !== undefined && job.match_score >= 0        const isNoResume = job.match_score === -1 && job.match_details?.error === 'no_resume'        const isError = job.match_score === -1 && !isNoResume        const isScoring = job.match_score === undefined        const getScoreColor = (score: number) => {            if (score >= 80) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'            if (score >= 70) return 'text-amber-400 bg-amber-500/10 border-amber-500/20'            return 'text-rose-400 bg-rose-500/10 border-rose-500/20'        }        const scoreClass = hasScore ? getScoreColor(job.match_score!) : 'text-[var(--text-secondary)] bg-white/5 border-white/10'        return (            <motion.div                key={job.job_id}                initial={{ opacity: 0, y: 10 }}                animate={{ opacity: 1, y: 0 }}                onClick={() => setSelectedJob(job)}                className={`p-4 rounded-xl border transition-all cursor-pointer ${isSelected                    ? 'bg-cyber-purple-500/10 border-cyber-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)]'                    : 'bg-[var(--card-bg)] border-[var(--card-border)] hover:border-cyber-purple-500/30 hover:bg-white/5'                    }`}            >                <div className="flex justify-between items-start mb-3">                    <div className="flex gap-3 items-center">                        {job.company_logo_url ? (                            <img src={job.company_logo_url} alt={job.company} className="w-10 h-10 rounded bg-white/5 object-contain" />                        ) : (                            <div className="w-10 h-10 rounded bg-white/5 flex items-center justify-center border border-white/10 text-white/50">                                <Briefcase size={20} />                            </div>                        )}                        <div>                            <h3 className="font-semibold text-[var(--text-primary)] leading-tight">{job.title}</h3>                            <p className="text-sm text-[var(--text-secondary)]">{job.company}</p>                        </div>                    </div>                    {hasScore ? (                        <div className={`px-2 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${scoreClass}`}>                            <Trophy size={10} /> {job.match_score}%                        </div>                    ) : isNoResume ? (                        <div className="px-2 py-1 rounded-full text-xs font-medium border border-amber-500/20 bg-amber-500/10 text-amber-400 flex items-center gap-1 cursor-pointer"                            onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}>                            <Upload size={10} /> Upload CV                        </div>                    ) : isError ? (                        <div className="px-2 py-1 rounded-full text-xs font-medium border border-rose-500/20 bg-rose-500/10 text-rose-400 flex items-center gap-1">                            <AlertCircle size={10} /> Error                        </div>                    ) : (                        <div className="px-2 py-1 rounded-full text-xs font-medium border border-white/5 bg-white/5 text-[var(--text-secondary)] flex items-center gap-1 animate-pulse">                            <Loader2 size={10} className="animate-spin" /> Scoring                        </div>                    )}                </div>                <div className="flex flex-wrap gap-2 text-xs text-[var(--text-secondary)] mb-4">                    {job.location && (                        <span className="flex items-center gap-1"><MapPin size={12} /> {job.location}</span>                    )}                    {job.is_remote && (                        <span className="flex items-center gap-1 text-cyber-blue-400"><Globe size={12} /> Remote</span>                    )}                    {job.salary_min && (                        <span className="flex items-center gap-1 text-emerald-400">                            <DollarSign size={12} />                            {job.salary_currency} {job.salary_min.toLocaleString()} {job.salary_max ? `- ${job.salary_max.toLocaleString()}` : ''}                        </span>                    )}                </div>                <div className="flex gap-2">                    <button                        onClick={(e) => { e.stopPropagation(); initiateAutoApply(job) }}                        disabled={applyingJobId === job.job_id}                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-cyber-purple-500/20 text-cyber-purple-300 hover:bg-cyber-purple-500/30 transition-colors border border-cyber-purple-500/30 disabled:opacity-50"                    >                        <span className="flex items-center justify-center gap-1">                            {applyingJobId === job.job_id ? <Loader2 size={12} className="animate-spin" /> : "🚀"} Auto-Apply                        </span>                    </button>                    <button className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 transition-colors border border-white/5">                        <Bookmark size={14} />                    </button>                </div>            </motion.div>        )    }    const renderJobDetails = () => {        if (!selectedJob) return (            <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] opacity-50">                <Briefcase size={48} className="mb-4" />                <p>Select a job to view details</p>            </div>        )        const activeJobWithDetails = jobs.find(j => j.job_id === selectedJob.job_id) || selectedJob        return (            <div className="h-full overflow-y-auto pr-2 custom-scrollbar">                <div className="flex items-start justify-between mb-6">                    <div className="flex gap-4">                        {selectedJob.company_logo_url ? (                            <img src={selectedJob.company_logo_url} alt={selectedJob.company} className="w-16 h-16 rounded-xl bg-white/5 object-contain" />                        ) : (                            <div className="w-16 h-16 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 text-white/50">                                <Briefcase size={32} />                            </div>                        )}                        <div>                            <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-1">{selectedJob.title}</h2>                            <p className="text-[var(--text-secondary)] text-lg flex items-center gap-2">                                {selectedJob.company}                                <a href={selectedJob.apply_url || '#'} target="_blank" rel="noreferrer" className="text-cyber-blue-400 hover:text-cyber-blue-300">                                    <ExternalLink size={14} />                                </a>                            </p>                        </div>                    </div>                </div>                <div className="flex flex-wrap gap-4 mb-8">                    <GlassCard className="flex-1 p-3 flex flex-col items-center text-center">                        <MapPin size={18} className="text-cyber-blue-400 mb-1" />                        <span className="text-xs text-[var(--text-secondary)]">Location</span>                        <span className="text-sm font-medium text-[var(--text-primary)]">{selectedJob.location || (selectedJob.is_remote ? 'Anywhere' : 'Not specified')}</span>                    </GlassCard>                    <GlassCard className="flex-1 p-3 flex flex-col items-center text-center">                        <DollarSign size={18} className="text-emerald-400 mb-1" />                        <span className="text-xs text-[var(--text-secondary)]">Salary</span>                        <span className="text-sm font-medium text-[var(--text-primary)]">                            {selectedJob.salary_min ? `${selectedJob.salary_currency} ${selectedJob.salary_min.toLocaleString()}` : 'Not provided'}                        </span>                    </GlassCard>                    <GlassCard className="flex-1 p-3 flex flex-col items-center text-center">                        <Clock size={18} className="text-amber-400 mb-1" />                        <span className="text-xs text-[var(--text-secondary)]">Posted</span>                        <span className="text-sm font-medium text-[var(--text-primary)]">                            {selectedJob.posted_date ? new Date(selectedJob.posted_date).toLocaleDateString() : 'Recent'}                        </span>                    </GlassCard>                </div>                <div className="mb-6">                    <CyberButton                        variant="primary"                        className="w-full flex justify-center items-center gap-2 py-3 text-lg"                        onClick={() => initiateAutoApply(selectedJob)}                        disabled={applyingJobId === selectedJob.job_id}                    >                        {applyingJobId === selectedJob.job_id ? (                            <><Loader2 size={18} className="animate-spin" /> Applying via AI...</>                        ) : (                            `🚀 Auto-Apply to ${selectedJob.company}`                        )}                    </CyberButton>                </div>                {}                {activeJobWithDetails?.match_details && activeJobWithDetails.match_score !== undefined && activeJobWithDetails.match_score >= 0 && !activeJobWithDetails.match_details?.error ? (                    <GlassCard className="p-5 mb-8 border border-cyber-purple-500/20 relative overflow-hidden">                        <div className="absolute top-0 right-0 w-32 h-32 bg-cyber-purple-500/10 rounded-full blur-3xl -mr-10 -mt-10" />                        <h3 className="text-sm font-bold text-cyber-purple-400 uppercase tracking-wider mb-4 flex items-center gap-2">                            <Star size={16} /> AI Match Analysis                        </h3>                        <div className="space-y-3 relative z-10">                            <div className="flex justify-between text-sm">                                <span className="text-[var(--text-secondary)]">Overall Match</span>                                <span className={`font-bold ${activeJobWithDetails.match_score && activeJobWithDetails.match_score >= 75 ? 'text-emerald-400' : 'text-amber-400'}`}>                                    {activeJobWithDetails.match_score}%                                </span>                            </div>                            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden mb-4">                                <div                                    className={`h-full rounded-full ${activeJobWithDetails.match_score && activeJobWithDetails.match_score >= 75 ? 'bg-emerald-500' : 'bg-amber-500'}`}                                    style={{ width: `${activeJobWithDetails.match_score}%` }}                                />                            </div>                            {activeJobWithDetails.match_details.strengths && activeJobWithDetails.match_details.strengths.length > 0 && (                                <div className="mb-2">                                    <p className="text-xs font-semibold text-emerald-400 mb-1 flex items-center gap-1"><CheckCircle2 size={12} /> Strengths</p>                                    <ul className="text-sm text-[var(--text-secondary)] list-disc pl-4">                                        {activeJobWithDetails.match_details.strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}                                    </ul>                                </div>                            )}                            {activeJobWithDetails.match_details.weaknesses && activeJobWithDetails.match_details.weaknesses.length > 0 && (                                <div className="mb-3">                                    <p className="text-xs font-semibold text-rose-400 mb-1 flex items-center gap-1"><XCircle size={12} /> Gaps</p>                                    <ul className="text-sm text-[var(--text-secondary)] list-disc pl-4">                                        {activeJobWithDetails.match_details.weaknesses.map((w: string, i: number) => <li key={i}>{w}</li>)}                                    </ul>                                </div>                            )}                            <p className="text-sm text-[var(--text-primary)] mt-3 border-t border-white/5 pt-3">                                {activeJobWithDetails.match_details.summary}                            </p>                        </div>                    </GlassCard>                ) : !resumeText ? (                    <div                        className="p-5 mb-8 rounded-xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-sm flex flex-col items-center justify-center min-h-[150px] cursor-pointer hover:border-amber-500/40 transition-colors"                        onClick={() => fileInputRef.current?.click()}                    >                        <Upload className="mb-2 text-amber-400" size={24} />                        <p className="text-sm font-medium text-amber-400">Upload Your Resume</p>                        <p className="text-xs text-[var(--text-secondary)] mt-1 text-center">Upload a .txt or .pdf resume to enable AI Match Scoring against this job</p>                    </div>                ) : activeJobWithDetails?.match_score === -1 && activeJobWithDetails?.match_details?.error ? (                    <GlassCard className="p-5 mb-8 border border-rose-500/20 flex flex-col items-center justify-center min-h-[150px]">                        <AlertCircle className="mb-2 text-rose-400" size={24} />                        <p className="text-sm font-medium text-rose-400">Match scoring failed</p>                        <p className="text-xs text-[var(--text-secondary)] mt-1">{activeJobWithDetails.match_details.error}</p>                    </GlassCard>                ) : (                    <GlassCard className="p-5 mb-8 border border-white/5 flex items-center justify-center min-h-[150px]">                        <div className="flex flex-col items-center text-[var(--text-secondary)]">                            <Loader2 className="animate-spin mb-2 text-cyber-purple-500" size={24} />                            <p className="text-sm">Gemini is analyzing your resume against this role...</p>                        </div>                    </GlassCard>                )}                {selectedJob.required_skills && selectedJob.required_skills.length > 0 && (                    <div className="mb-6">                        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3">Required Skills</h3>                        <div className="flex flex-wrap gap-2">                            {selectedJob.required_skills.slice(0, 15).map((skill, i) => (                                <span key={i} className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-xs text-[var(--text-secondary)]">                                    {skill}                                </span>                            ))}                            {selectedJob.required_skills.length > 15 && (                                <span className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-xs text-[var(--text-secondary)] opacity-50">                                    +{selectedJob.required_skills.length - 15} more                                </span>                            )}                        </div>                    </div>                )}                <div className="mb-8">                    <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3">Job Description</h3>                    <div className="text-sm text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">                        {selectedJob.description || "No description provided by the aggregator."}                    </div>                </div>            </div>        )    }    return (        <div className="h-[calc(100vh-73px)] flex flex-col bg-[var(--bg-deep)] text-[var(--text-primary)] overflow-hidden">            {}            <div className="w-full border-b border-[var(--card-border)] bg-[var(--bg-card)]/50 backdrop-blur-md p-4 sticky top-0 z-20">                <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4 items-center justify-between">                    <form onSubmit={handleSearch} className="flex-1 w-full flex gap-2">                        <div className="relative flex-1">                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={18} />                            <input                                type="text"                                value={query}                                onChange={e => setQuery(e.target.value)}                                placeholder="Job title, keywords, or company..."                                className="w-full bg-[var(--bg-deep)] border border-[var(--card-border)] rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-cyber-purple-500 transition-colors"                            />                        </div>                        <div className="relative w-64 hidden sm:block">                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={18} />                            <input                                type="text"                                value={location}                                onChange={e => setLocation(e.target.value)}                                placeholder="City, state, or zip"                                className="w-full bg-[var(--bg-deep)] border border-[var(--card-border)] rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-cyber-purple-500 transition-colors"                            />                        </div>                        <CyberButton type="submit" variant="primary" className="px-6 flex items-center justify-center min-w-[120px]" disabled={isLoading}>                            {isLoading ? <Loader2 className="animate-spin" size={18} /> : 'Search Jobs'}                        </CyberButton>                    </form>                    <div className="flex gap-2">                        <Link href="/jobs/saved">                            <CyberButton variant="ghost" className="text-sm px-3 flex items-center gap-2">                                <BookmarkCheck size={16} /> Saved                            </CyberButton>                        </Link>                        <Link href="/jobs/tracker">                            <CyberButton variant="outline" className="text-sm px-3 flex items-center gap-2 border-cyber-blue-500/30 text-cyber-blue-400">                                <Kanban size={16} /> Tracker                            </CyberButton>                        </Link>                    </div>                </div>            </div>            {}            <div className="flex-1 max-w-7xl mx-auto w-full flex overflow-hidden">                {}                <div className="w-64 border-r border-[var(--card-border)] p-5 overflow-y-auto hidden lg:block">                    {}                    <input                        ref={fileInputRef}                        type="file"                        accept=".txt,.pdf,.doc,.docx,.md"                        onChange={handleResumeUpload}                        className="hidden"                        id="resume-upload"                    />                    {}                    <div className="mb-6">                        <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-3 flex items-center gap-1.5">                            <FileText size={12} /> Your Resume                        </h4>                        {resumeText ? (                            <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5">                                <div className="flex items-center gap-2 mb-2">                                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">                                        <FileText size={14} className="text-emerald-400" />                                    </div>                                    <div className="flex-1 min-w-0">                                        <p className="text-xs font-medium text-emerald-400 truncate">{resumeFileName}</p>                                        <p className="text-[10px] text-emerald-400/60">{resumeText.length.toLocaleString()} chars</p>                                    </div>                                </div>                                <div className="flex gap-2">                                    <button                                        onClick={() => fileInputRef.current?.click()}                                        className="flex-1 py-1.5 rounded-lg text-[10px] font-medium bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 transition-colors border border-white/5"                                    >                                        Replace                                    </button>                                    <button                                        onClick={removeResume}                                        className="px-2 py-1.5 rounded-lg text-[10px] font-medium bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors border border-rose-500/20"                                    >                                        <Trash2 size={10} />                                    </button>                                </div>                                <div className="mt-2 flex items-center gap-1">                                    <CheckCircle2 size={10} className="text-emerald-400" />                                    <span className="text-[10px] text-emerald-400">AI Match Scoring Active</span>                                </div>                            </div>                        ) : (                            <div                                onClick={() => fileInputRef.current?.click()}                                className="p-4 rounded-xl border-2 border-dashed border-cyber-purple-500/30 bg-cyber-purple-500/5 cursor-pointer hover:border-cyber-purple-500/50 hover:bg-cyber-purple-500/10 transition-all text-center group"                            >                                {isProcessingResume ? (                                    <>                                        <Loader2 size={20} className="animate-spin text-cyber-purple-400 mx-auto mb-2" />                                        <p className="text-xs text-cyber-purple-400 font-medium">Processing...</p>                                    </>                                ) : (                                    <>                                        <Upload size={20} className="text-cyber-purple-400/60 mx-auto mb-2 group-hover:text-cyber-purple-400 transition-colors" />                                        <p className="text-xs font-medium text-cyber-purple-400">Upload Resume</p>                                        <p className="text-[10px] text-[var(--text-secondary)] mt-1">.txt or .pdf</p>                                    </>                                )}                            </div>                        )}                    </div>                    <hr className="border-[var(--card-border)] mb-5" />                    <div className="flex items-center justify-between mb-6">                        <h3 className="font-semibold flex items-center gap-2"><SlidersHorizontal size={16} /> Filters</h3>                        {jobs.length > 0 && <span className="text-xs text-cyber-blue-400 cursor-pointer" onClick={clearFilters}>Clear</span>}                    </div>                    <div className="space-y-6">                        <div className="space-y-3">                            <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Job Type</h4>                            <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">                                <input type="checkbox" checked={filterFullTime} onChange={e => setFilterFullTime(e.target.checked)} className="rounded bg-[var(--bg-deep)] border-[var(--card-border)] text-cyber-purple-500 focus:ring-cyber-purple-500/0" />                                Full-time                            </label>                            <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">                                <input type="checkbox" checked={filterContract} onChange={e => setFilterContract(e.target.checked)} className="rounded bg-[var(--bg-deep)] border-[var(--card-border)] text-cyber-purple-500 focus:ring-cyber-purple-500/0" />                                Contract                            </label>                            <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">                                <input type="checkbox" checked={filterRemote} onChange={e => setFilterRemote(e.target.checked)} className="rounded bg-[var(--bg-deep)] border-[var(--card-border)] text-cyber-purple-500 focus:ring-cyber-purple-500/0" />                                Remote                            </label>                        </div>                        <div className="space-y-3">                            <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">AI Match Score</h4>                            <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">                                <input type="radio" name="match" checked={filterMatchScore === '80'} onChange={() => setFilterMatchScore('80')} className="bg-[var(--bg-deep)] border-[var(--card-border)] text-emerald-500" />                                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> 80%+ Match</span>                            </label>                            <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">                                <input type="radio" name="match" checked={filterMatchScore === '70'} onChange={() => setFilterMatchScore('70')} className="bg-[var(--bg-deep)] border-[var(--card-border)] text-amber-500" />                                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500"></div> 70%+ Match</span>                            </label>                            <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">                                <input type="radio" name="match" checked={filterMatchScore === 'all'} onChange={() => setFilterMatchScore('all')} className="bg-[var(--bg-deep)] border-[var(--card-border)] text-[var(--text-secondary)]" />                                All Jobs                            </label>                        </div>                    </div>                </div>                {}                <div className="flex-1 md:w-[400px] md:flex-none border-r border-[var(--card-border)] flex flex-col bg-[var(--bg-deep)]/50">                    <div className="p-4 border-b border-[var(--card-border)] flex justify-between items-center bg-[var(--bg-card)]/30 backdrop-blur-sm">                        <span className="text-sm font-medium text-[var(--text-secondary)]">                            {isLoading ? 'Searching...' : jobs.length > 0 ? `Found ${filteredJobs.length} jobs` : 'Search to start'}                        </span>                        <div className="flex items-center gap-1 text-sm text-[var(--text-secondary)] cursor-pointer hover:text-[var(--text-primary)]">                            Sort: Relevance <ChevronDown size={14} />                        </div>                    </div>                    <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">                        {isLoading ? (                            Array(5).fill(0).map((_, i) => (                                <div key={i} className="h-32 rounded-xl bg-[var(--card-bg)] border border-[var(--card-border)] animate-pulse shrink-0" />                            ))                        ) : filteredJobs.length > 0 ? (                            filteredJobs.map(job => renderJobCard(job))                        ) : (                            <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] opacity-50 p-8 text-center">                                <Search size={48} className="mb-4 text-cyber-purple-500/20" />                                <p className="font-medium text-[var(--text-primary)] mb-1">No Jobs Found</p>                                <p className="text-sm">Try adjusting your search terms or running the AI Aggregation engine again.</p>                            </div>                        )}                    </div>                </div>                {}                <div className="flex-[1.5] hidden md:block bg-[var(--bg-card)] p-6 overflow-hidden">                    {renderJobDetails()}                </div>            </div>            {}            <AnimatePresence>                {showPreApplyModal && jobToApply && (                    <motion.div                        initial={{ opacity: 0 }}                        animate={{ opacity: 1 }}                        exit={{ opacity: 0 }}                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"                        onClick={() => setShowPreApplyModal(false)}                    >                        <motion.div                            initial={{ scale: 0.95, opacity: 0, y: 20 }}                            animate={{ scale: 1, opacity: 1, y: 0 }}                            exit={{ scale: 0.95, opacity: 0, y: 20 }}                            onClick={(e) => e.stopPropagation()}                            className="bg-[var(--bg-deep)] border border-cyber-purple-500/30 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl shadow-cyber-purple-500/10"                        >                            <div className="p-6 border-b border-[var(--card-border)] bg-white/5 relative overflow-hidden">                                <div className="absolute top-0 right-0 w-32 h-32 bg-cyber-purple-500/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />                                <h2 className="text-xl font-bold flex items-center gap-2 relative z-10">                                    <span className="bg-cyber-purple-500/20 p-2 rounded-lg border border-cyber-purple-500/30 text-cyber-purple-400">                                        <Briefcase size={20} />                                    </span>                                    Auto-Apply Configuration                                </h2>                            </div>                            <div className="p-6 space-y-6">                                <div>                                    <p className="text-sm text-[var(--text-secondary)] mb-1">Target Application</p>                                    <p className="font-semibold">{jobToApply.title} at {jobToApply.company}</p>                                </div>                                <div className="space-y-3">                                    <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">AI Instructions</h3>                                    <label className="flex items-start gap-3 p-3 rounded-lg border border-[var(--card-border)] bg-white/5 hover:border-cyber-purple-500/40 cursor-pointer transition-colors">                                        <input type="checkbox" defaultChecked className="mt-1 rounded border-white/20 text-cyber-purple-500 focus:ring-0 bg-[var(--bg-deep)]" />                                        <div>                                            <p className="text-sm font-medium">Generate Custom Cover Letter</p>                                            <p className="text-xs text-[var(--text-secondary)]">Gemini will draft a cover letter based on your master resume and this exact JD.</p>                                        </div>                                    </label>                                    <label className="flex items-start gap-3 p-3 rounded-lg border border-[var(--card-border)] bg-white/5 hover:border-cyber-purple-500/40 cursor-pointer transition-colors">                                        <input type="checkbox" defaultChecked className="mt-1 rounded border-white/20 text-cyber-purple-500 focus:ring-0 bg-[var(--bg-deep)]" />                                        <div>                                            <p className="text-sm font-medium">Auto-Fill Application Questions</p>                                            <p className="text-xs text-[var(--text-secondary)]">AI will answer text-based questions using your background.</p>                                        </div>                                    </label>                                </div>                                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm text-amber-200/90 flex gap-2">                                    <AlertCircle size={18} className="shrink-0 text-amber-400" />                                    <p>Playwright will execute this application in a headless browser. Rate limits apply.</p>                                </div>                            </div>                            <div className="p-6 border-t border-[var(--card-border)] bg-white/5 flex justify-end gap-3">                                <CyberButton variant="ghost" onClick={() => setShowPreApplyModal(false)}>                                    Cancel                                </CyberButton>                                <CyberButton variant="primary" onClick={confirmAutoApply} className="flex items-center gap-2">                                    <Play size={16} fill="currentColor" /> Let AI Apply                                </CyberButton>                            </div>                        </motion.div>                    </motion.div>                )}            </AnimatePresence>        </div>    )}
+"use client";
+import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Search,
+  MapPin,
+  Briefcase,
+  Globe,
+  DollarSign,
+  Clock,
+  Bookmark,
+  ChevronDown,
+  LayoutDashboard,
+  Kanban,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  ExternalLink,
+  Loader2,
+  SlidersHorizontal,
+  BookmarkCheck,
+  Play,
+  Trophy,
+  Star,
+  Upload,
+  FileText,
+  Trash2,
+} from "lucide-react";
+import GlassCard from "@/components/ui/GlassCard";
+import CyberButton from "@/components/ui/CyberButton";
+import { useAuthStore } from "@/lib/stores/authStore";
+import toast from "react-hot-toast";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+interface Job {
+  job_id: string;
+  source: string;
+  title: string;
+  company: string;
+  company_logo_url?: string;
+  location?: string;
+  is_remote: boolean;
+  salary_min?: number;
+  salary_max?: number;
+  salary_currency?: string;
+  description?: string;
+  required_skills: string[];
+  experience_level?: string;
+  apply_url?: string;
+  posted_date?: string;
+  match_score?: number;
+  match_details?: any;
+}
+export default function JobsPortal() {
+  const { user } = useAuthStore();
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  const pathname = usePathname();
+  const [query, setQuery] = useState("");
+  const [location, setLocation] = useState("");
+  const [isRemoteOnly, setIsRemoteOnly] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
+  const [showPreApplyModal, setShowPreApplyModal] = useState(false);
+  const [jobToApply, setJobToApply] = useState<Job | null>(null);
+  // Resume upload state
+  const [resumeText, setResumeText] = useState<string>("");
+  const [resumeFileName, setResumeFileName] = useState<string>("");
+  const [isProcessingResume, setIsProcessingResume] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Load saved resume from localStorage on mount
+  useEffect(() => {
+    const savedResume = localStorage.getItem("jobs_resume_text");
+    const savedName = localStorage.getItem("jobs_resume_filename");
+    if (savedResume) setResumeText(savedResume);
+    if (savedName) setResumeFileName(savedName);
+  }, []);
+  const [filterFullTime, setFilterFullTime] = useState(false);
+  const [filterContract, setFilterContract] = useState(false);
+  const [filterRemote, setFilterRemote] = useState(false);
+  const [filterMatchScore, setFilterMatchScore] = useState<"all" | "80" | "70">(
+    "all",
+  );
+  const filteredJobs = jobs.filter((job) => {
+    const anyTypeSelected = filterFullTime || filterContract || filterRemote;
+    if (anyTypeSelected) {
+      const titleLower = (job.title || "").toLowerCase();
+      const descLower = (job.description || "").toLowerCase();
+      const isRemoteJob =
+        job.is_remote ||
+        titleLower.includes("remote") ||
+        descLower.includes("remote");
+      const isContractJob =
+        titleLower.includes("contract") ||
+        titleLower.includes("freelance") ||
+        descLower.includes("contract");
+      const isFullTimeJob = !isContractJob;
+      let matches = false;
+      if (filterRemote && isRemoteJob) matches = true;
+      if (filterContract && isContractJob) matches = true;
+      if (filterFullTime && isFullTimeJob) matches = true;
+      if (!matches) return false;
+    }
+    if (filterMatchScore === "80") {
+      return job.match_score !== undefined && job.match_score >= 80;
+    }
+    if (filterMatchScore === "70") {
+      return job.match_score !== undefined && job.match_score >= 70;
+    }
+    return true;
+  });
+  const clearFilters = () => {
+    setFilterFullTime(false);
+    setFilterContract(false);
+    setFilterRemote(false);
+    setFilterMatchScore("all");
+  };
+  const handleSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!query) return;
+    setIsLoading(true);
+    setJobs([]);
+    setSelectedJob(null);
+    try {
+      const apiBase =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+      const response = await fetch(
+        `${apiBase}/api/jobs/jobs/search/aggregate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            query: query,
+            location: location || null,
+            remote_only: isRemoteOnly,
+            page: 1,
+          }),
+        },
+      );
+      if (!response.ok) throw new Error("Failed to fetch jobs");
+      const data = await response.json();
+      setJobs(data);
+      if (data.length > 0) {
+        setSelectedJob(data[0]);
+        const jobsToScore = data.slice(0, 5);
+        jobsToScore.forEach((job: Job, index: number) => {
+          setTimeout(() => fetchMatchScore(job), index * 2500);
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to aggregate jobs from providers.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingResume(true);
+    const fileName = file.name;
+    try {
+      let text = "";
+      if (file.name.endsWith(".txt") || file.name.endsWith(".md")) {
+        text = await file.text();
+      } else {
+        const apiBase =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch(
+          `${apiBase}/api/jobs/jobs/extract-resume`,
+          {
+            method: "POST",
+            body: formData,
+          },
+        );
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+        const result = await response.json();
+        if (!result.success) {
+          toast.error(result.error || "Could not extract text from this file.");
+          setIsProcessingResume(false);
+          return;
+        }
+        text = result.text;
+        console.log(
+          `[ResumeUpload] Backend extracted ${result.chars} chars from ${fileName}`,
+        );
+      }
+      if (text.trim().length < 20) {
+        toast.error(
+          "Could not extract enough text from this file. Try a different format.",
+        );
+        setIsProcessingResume(false);
+        return;
+      }
+      setResumeText(text.trim());
+      setResumeFileName(fileName);
+      localStorage.setItem("jobs_resume_text", text.trim());
+      localStorage.setItem("jobs_resume_filename", fileName);
+      toast.success(
+        `Resume "${fileName}" uploaded! AI Match Scoring is now active.`,
+      );
+      if (jobs.length > 0) {
+        jobs.slice(0, 5).forEach((job, index) => {
+          setTimeout(() => fetchMatchScore(job, text.trim()), index * 2500);
+        });
+      }
+    } catch (error) {
+      console.error("Resume upload error:", error);
+      toast.error("Failed to process resume file. Please try again.");
+    } finally {
+      setIsProcessingResume(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+  const removeResume = () => {
+    setResumeText("");
+    setResumeFileName("");
+    localStorage.removeItem("jobs_resume_text");
+    localStorage.removeItem("jobs_resume_filename");
+    setJobs((prev) =>
+      prev.map((j) => ({
+        ...j,
+        match_score: undefined,
+        match_details: undefined,
+      })),
+    );
+    toast.success("Resume removed");
+  };
+  const fetchMatchScore = async (job: Job, overrideResumeText?: string) => {
+    const textToUse = overrideResumeText || resumeText;
+    if (!textToUse) {
+      setJobs((prevJobs) =>
+        prevJobs.map((p) =>
+          p.job_id === job.job_id
+            ? { ...p, match_score: -1, match_details: { error: "no_resume" } }
+            : p,
+        ),
+      );
+      return;
+    }
+    try {
+      const apiBase =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+      const response = await fetch(`${apiBase}/api/jobs/jobs/calculate-match`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          job_description: job.description || job.title,
+          job_title: job.title,
+          required_skills: job.required_skills,
+          resume_text: textToUse,
+        }),
+      });
+      if (response.ok) {
+        const matchData = await response.json();
+        setJobs((prevJobs) =>
+          prevJobs.map((p) =>
+            p.job_id === job.job_id
+              ? {
+                ...p,
+                match_score: matchData.match_score,
+                match_details: matchData.details,
+              }
+              : p,
+          ),
+        );
+      } else {
+        setJobs((prevJobs) =>
+          prevJobs.map((p) =>
+            p.job_id === job.job_id
+              ? { ...p, match_score: -1, match_details: { error: "api_error" } }
+              : p,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error(`Failed to fetch match score for ${job.job_id}`, error);
+      setJobs((prevJobs) =>
+        prevJobs.map((p) =>
+          p.job_id === job.job_id
+            ? {
+              ...p,
+              match_score: -1,
+              match_details: { error: "network_error" },
+            }
+            : p,
+        ),
+      );
+    }
+  };
+  const initiateAutoApply = (job: Job) => {
+    if (!user) {
+      toast.error("Please log in to auto-apply to jobs");
+      return;
+    }
+    setJobToApply(job);
+    setShowPreApplyModal(true);
+  };
+  const confirmAutoApply = async () => {
+    if (!jobToApply) return;
+    setShowPreApplyModal(false);
+    setApplyingJobId(jobToApply.job_id);
+    const applyToast = toast.loading(
+      `Starting AI Auto-Apply for ${jobToApply.company}...`,
+    );
+    try {
+      const apiBase =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+      const response = await fetch(`${apiBase}/api/jobs/jobs/auto-apply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          job_id: jobToApply.job_id,
+          job_url: jobToApply.apply_url || "https://example.com/apply",
+          require_manual_review: false,
+        }),
+      });
+      const result = await response.json();
+      if (response.ok && result.status === "success") {
+        toast.success(
+          <div>
+            <p className="font-semibold">Auto-Apply Successful!</p>
+            <p className="text-xs mt-1">
+              AI successfully filled and submitted the application to{" "}
+              {jobToApply.company}.
+            </p>
+          </div>,
+          { id: applyToast, duration: 5000 },
+        );
+      } else {
+        toast.error(
+          result.error ||
+          result.message ||
+          "Failed to auto-apply. Try manually.",
+          { id: applyToast },
+        );
+      }
+    } catch (error) {
+      console.error("Auto-apply error:", error);
+      toast.error("Network error. Could not contact Auto-Apply engine.", {
+        id: applyToast,
+      });
+    } finally {
+      setApplyingJobId(null);
+      setJobToApply(null);
+    }
+  };
+  const renderJobCard = (job: Job & { match_details?: any }) => {
+    const isSelected = selectedJob?.job_id === job.job_id;
+    const hasScore = job.match_score !== undefined && job.match_score >= 0 && !job.match_details?.error;
+    const isNoResume =
+      job.match_score === -1 && job.match_details?.error === "no_resume";
+    const isError = !!job.match_details?.error && !isNoResume;
+    const isScoring = job.match_score === undefined;
+    const getScoreColor = (score: number) => {
+      if (score >= 80)
+        return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+      if (score >= 70)
+        return "text-amber-400 bg-amber-500/10 border-amber-500/20";
+      return "text-rose-400 bg-rose-500/10 border-rose-500/20";
+    };
+    const scoreClass = hasScore
+      ? getScoreColor(job.match_score!)
+      : "text-[var(--text-secondary)] bg-white/5 border-white/10";
+    return (
+      <motion.div
+        key={job.job_id}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        onClick={() => setSelectedJob(job)}
+        className={`p-4 rounded-xl border transition-all cursor-pointer ${isSelected
+          ? "bg-cyber-purple-500/10 border-cyber-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+          : "bg-[var(--card-bg)] border-[var(--card-border)] hover:border-cyber-purple-500/30 hover:bg-white/5"
+          }`}
+      >
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex gap-3 items-center">
+            {job.company_logo_url ? (
+              <img
+                src={job.company_logo_url}
+                alt={job.company}
+                className="w-10 h-10 rounded bg-white/5 object-contain"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded bg-white/5 flex items-center justify-center border border-white/10 text-white/50">
+                <Briefcase size={20} />
+              </div>
+            )}
+            <div>
+              <h3 className="font-semibold text-[var(--text-primary)] leading-tight">
+                {job.title}
+              </h3>
+              <p className="text-sm text-[var(--text-secondary)]">
+                {job.company}
+              </p>
+            </div>
+          </div>
+          {hasScore ? (
+            <div
+              className={`px-2 py-1 rounded-full text-xs font-medium border flex items-center gap-1 ${scoreClass}`}
+            >
+              <Trophy size={10} /> {job.match_score}%
+            </div>
+          ) : isNoResume ? (
+            <div
+              className="px-2 py-1 rounded-full text-xs font-medium border border-amber-500/20 bg-amber-500/10 text-amber-400 flex items-center gap-1 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+            >
+              <Upload size={10} /> Upload CV
+            </div>
+          ) : isError ? (
+            <div className="px-2 py-1 rounded-full text-xs font-medium border border-rose-500/20 bg-rose-500/10 text-rose-400 flex items-center gap-1">
+              <AlertCircle size={10} /> Error
+            </div>
+          ) : (
+            <div className="px-2 py-1 rounded-full text-xs font-medium border border-white/5 bg-white/5 text-[var(--text-secondary)] flex items-center gap-1 animate-pulse">
+              <Loader2 size={10} className="animate-spin" /> Scoring
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs text-[var(--text-secondary)] mb-4">
+          {job.location && (
+            <span className="flex items-center gap-1">
+              <MapPin size={12} /> {job.location}
+            </span>
+          )}
+          {job.is_remote && (
+            <span className="flex items-center gap-1 text-cyber-blue-400">
+              <Globe size={12} /> Remote
+            </span>
+          )}
+          {job.salary_min && (
+            <span className="flex items-center gap-1 text-emerald-400">
+              <DollarSign size={12} />
+              {job.salary_currency} {job.salary_min.toLocaleString()}{" "}
+              {job.salary_max ? `- ${job.salary_max.toLocaleString()}` : ""}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              initiateAutoApply(job);
+            }}
+            disabled={applyingJobId === job.job_id}
+            className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-cyber-purple-500/20 text-cyber-purple-300 hover:bg-cyber-purple-500/30 transition-colors border border-cyber-purple-500/30 disabled:opacity-50"
+          >
+            <span className="flex items-center justify-center gap-1">
+              {applyingJobId === job.job_id ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                "🚀"
+              )}{" "}
+              Auto-Apply
+            </span>
+          </button>
+          <button className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 transition-colors border border-white/5">
+            <Bookmark size={14} />
+          </button>
+        </div>
+      </motion.div>
+    );
+  };
+  const renderJobDetails = () => {
+    if (!selectedJob)
+      return (
+        <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] opacity-50">
+          <Briefcase size={48} className="mb-4" />
+          <p>Select a job to view details</p>
+        </div>
+      );
+    const activeJobWithDetails =
+      jobs.find((j) => j.job_id === selectedJob.job_id) || selectedJob;
+    return (
+      <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
+        <div className="flex items-start justify-between mb-6">
+          <div className="flex gap-4">
+            {selectedJob.company_logo_url ? (
+              <img
+                src={selectedJob.company_logo_url}
+                alt={selectedJob.company}
+                className="w-16 h-16 rounded-xl bg-white/5 object-contain"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 text-white/50">
+                <Briefcase size={32} />
+              </div>
+            )}
+            <div>
+              <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-1">
+                {selectedJob.title}
+              </h2>
+              <p className="text-[var(--text-secondary)] text-lg flex items-center gap-2">
+                {selectedJob.company}
+                <a
+                  href={selectedJob.apply_url || "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-cyber-blue-400 hover:text-cyber-blue-300"
+                >
+                  <ExternalLink size={14} />
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-4 mb-8">
+          <GlassCard className="flex-1 p-3 flex flex-col items-center text-center">
+            <MapPin size={18} className="text-cyber-blue-400 mb-1" />
+            <span className="text-xs text-[var(--text-secondary)]">
+              Location
+            </span>
+            <span className="text-sm font-medium text-[var(--text-primary)]">
+              {selectedJob.location ||
+                (selectedJob.is_remote ? "Anywhere" : "Not specified")}
+            </span>
+          </GlassCard>
+          <GlassCard className="flex-1 p-3 flex flex-col items-center text-center">
+            <DollarSign size={18} className="text-emerald-400 mb-1" />
+            <span className="text-xs text-[var(--text-secondary)]">Salary</span>
+            <span className="text-sm font-medium text-[var(--text-primary)]">
+              {selectedJob.salary_min
+                ? `${selectedJob.salary_currency} ${selectedJob.salary_min.toLocaleString()}`
+                : "Not provided"}
+            </span>
+          </GlassCard>
+          <GlassCard className="flex-1 p-3 flex flex-col items-center text-center">
+            <Clock size={18} className="text-amber-400 mb-1" />
+            <span className="text-xs text-[var(--text-secondary)]">Posted</span>
+            <span className="text-sm font-medium text-[var(--text-primary)]">
+              {selectedJob.posted_date
+                ? new Date(selectedJob.posted_date).toLocaleDateString()
+                : "Recent"}
+            </span>
+          </GlassCard>
+        </div>
+        <div className="mb-6">
+          <CyberButton
+            variant="primary"
+            className="w-full flex justify-center items-center gap-2 py-3 text-lg"
+            onClick={() => initiateAutoApply(selectedJob)}
+            disabled={applyingJobId === selectedJob.job_id}
+          >
+            {applyingJobId === selectedJob.job_id ? (
+              <>
+                <Loader2 size={18} className="animate-spin" /> Applying via
+                AI...
+              </>
+            ) : (
+              `🚀 Auto-Apply to ${selectedJob.company}`
+            )}
+          </CyberButton>
+        </div>
+        { }
+        {activeJobWithDetails?.match_details &&
+          activeJobWithDetails.match_score !== undefined &&
+          activeJobWithDetails.match_score >= 0 &&
+          !activeJobWithDetails.match_details?.error ? (
+          <GlassCard className="p-5 mb-8 border border-cyber-purple-500/20 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-cyber-purple-500/10 rounded-full blur-3xl -mr-10 -mt-10" />
+            <h3 className="text-sm font-bold text-cyber-purple-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Star size={16} /> AI Match Analysis
+            </h3>
+            <div className="space-y-3 relative z-10">
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--text-secondary)]">
+                  Overall Match
+                </span>
+                <span
+                  className={`font-bold ${activeJobWithDetails.match_score && activeJobWithDetails.match_score >= 75 ? "text-emerald-400" : "text-amber-400"}`}
+                >
+                  {activeJobWithDetails.match_score}%
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden mb-4">
+                <div
+                  className={`h-full rounded-full ${activeJobWithDetails.match_score && activeJobWithDetails.match_score >= 75 ? "bg-emerald-500" : "bg-amber-500"}`}
+                  style={{ width: `${activeJobWithDetails.match_score}%` }}
+                />
+              </div>
+              {activeJobWithDetails.match_details.strengths &&
+                activeJobWithDetails.match_details.strengths.length > 0 && (
+                  <div className="mb-2">
+                    <p className="text-xs font-semibold text-emerald-400 mb-1 flex items-center gap-1">
+                      <CheckCircle2 size={12} /> Strengths
+                    </p>
+                    <ul className="text-sm text-[var(--text-secondary)] list-disc pl-4">
+                      {activeJobWithDetails.match_details.strengths.map(
+                        (s: string, i: number) => (
+                          <li key={i}>{s}</li>
+                        ),
+                      )}
+                    </ul>
+                  </div>
+                )}
+              {activeJobWithDetails.match_details.weaknesses &&
+                activeJobWithDetails.match_details.weaknesses.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs font-semibold text-rose-400 mb-1 flex items-center gap-1">
+                      <XCircle size={12} /> Gaps
+                    </p>
+                    <ul className="text-sm text-[var(--text-secondary)] list-disc pl-4">
+                      {activeJobWithDetails.match_details.weaknesses.map(
+                        (w: string, i: number) => (
+                          <li key={i}>{w}</li>
+                        ),
+                      )}
+                    </ul>
+                  </div>
+                )}
+              <p className="text-sm text-[var(--text-primary)] mt-3 border-t border-white/5 pt-3">
+                {activeJobWithDetails.match_details.summary}
+              </p>
+            </div>
+          </GlassCard>
+        ) : !resumeText ? (
+          <div
+            className="p-5 mb-8 rounded-xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-sm flex flex-col items-center justify-center min-h-[150px] cursor-pointer hover:border-amber-500/40 transition-colors"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="mb-2 text-amber-400" size={24} />
+            <p className="text-sm font-medium text-amber-400">
+              Upload Your Resume
+            </p>
+            <p className="text-xs text-[var(--text-secondary)] mt-1 text-center">
+              Upload a .txt or .pdf resume to enable AI Match Scoring against
+              this job
+            </p>
+          </div>
+        ) : activeJobWithDetails?.match_details?.error ? (
+          <GlassCard className="p-5 mb-8 border border-rose-500/20 flex flex-col items-center justify-center min-h-[150px]">
+            <AlertCircle className="mb-2 text-rose-400" size={24} />
+            <p className="text-sm font-medium text-rose-400">
+              Match scoring failed
+            </p>
+            <p className="text-xs text-[var(--text-secondary)] mt-1 px-4 text-center">
+              {activeJobWithDetails.match_details.error}
+            </p>
+          </GlassCard>
+        ) : (
+          <GlassCard className="p-5 mb-8 border border-white/5 flex items-center justify-center min-h-[150px]">
+            <div className="flex flex-col items-center text-[var(--text-secondary)]">
+              <Loader2
+                className="animate-spin mb-2 text-cyber-purple-500"
+                size={24}
+              />
+              <p className="text-sm">
+                Gemini is analyzing your resume against this role...
+              </p>
+            </div>
+          </GlassCard>
+        )}
+        {selectedJob.required_skills &&
+          selectedJob.required_skills.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3">
+                Required Skills
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {selectedJob.required_skills.slice(0, 15).map((skill, i) => (
+                  <span
+                    key={i}
+                    className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-xs text-[var(--text-secondary)]"
+                  >
+                    {skill}
+                  </span>
+                ))}
+                {selectedJob.required_skills.length > 15 && (
+                  <span className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-xs text-[var(--text-secondary)] opacity-50">
+                    +{selectedJob.required_skills.length - 15} more
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-3">
+            Job Description
+          </h3>
+          <div className="text-sm text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">
+            {selectedJob.description ||
+              "No description provided by the aggregator."}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div className="h-[calc(100vh-73px)] flex flex-col bg-[var(--bg-deep)] text-[var(--text-primary)] overflow-hidden">
+      { }
+      <div className="w-full border-b border-[var(--card-border)] bg-[var(--bg-card)]/50 backdrop-blur-md p-4 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4 items-center justify-between">
+          <form onSubmit={handleSearch} className="flex-1 w-full flex gap-2">
+            <div className="relative flex-1">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]"
+                size={18}
+              />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Job title, keywords, or company..."
+                className="w-full bg-[var(--bg-deep)] border border-[var(--card-border)] rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-cyber-purple-500 transition-colors"
+              />
+            </div>
+            <div className="relative w-64 hidden sm:block">
+              <MapPin
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]"
+                size={18}
+              />
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="City, state, or zip"
+                className="w-full bg-[var(--bg-deep)] border border-[var(--card-border)] rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-cyber-purple-500 transition-colors"
+              />
+            </div>
+            <CyberButton
+              type="submit"
+              variant="primary"
+              className="px-6 flex items-center justify-center min-w-[120px]"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                "Search Jobs"
+              )}
+            </CyberButton>
+          </form>
+          <div className="flex gap-2">
+            <Link href="/jobs/saved">
+              <CyberButton
+                variant="ghost"
+                className="text-sm px-3 flex items-center gap-2"
+              >
+                <BookmarkCheck size={16} /> Saved
+              </CyberButton>
+            </Link>
+            <Link href="/jobs/tracker">
+              <CyberButton
+                variant="outline"
+                className="text-sm px-3 flex items-center gap-2 border-cyber-blue-500/30 text-cyber-blue-400"
+              >
+                <Kanban size={16} /> Tracker
+              </CyberButton>
+            </Link>
+          </div>
+        </div>
+      </div>
+      { }
+      <div className="flex-1 max-w-7xl mx-auto w-full flex overflow-hidden">
+        { }
+        <div className="w-64 border-r border-[var(--card-border)] p-5 overflow-y-auto hidden lg:block">
+          { }
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.pdf,.doc,.docx,.md"
+            onChange={handleResumeUpload}
+            className="hidden"
+            id="resume-upload"
+          />
+          { }
+          <div className="mb-6">
+            <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <FileText size={12} /> Your Resume
+            </h4>
+            {resumeText ? (
+              <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                    <FileText size={14} className="text-emerald-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-emerald-400 truncate">
+                      {resumeFileName}
+                    </p>
+                    <p className="text-[10px] text-emerald-400/60">
+                      {resumeText.length.toLocaleString()} chars
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 py-1.5 rounded-lg text-[10px] font-medium bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 transition-colors border border-white/5"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    onClick={removeResume}
+                    className="px-2 py-1.5 rounded-lg text-[10px] font-medium bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors border border-rose-500/20"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center gap-1">
+                  <CheckCircle2 size={10} className="text-emerald-400" />
+                  <span className="text-[10px] text-emerald-400">
+                    AI Match Scoring Active
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="p-4 rounded-xl border-2 border-dashed border-cyber-purple-500/30 bg-cyber-purple-500/5 cursor-pointer hover:border-cyber-purple-500/50 hover:bg-cyber-purple-500/10 transition-all text-center group"
+              >
+                {isProcessingResume ? (
+                  <>
+                    <Loader2
+                      size={20}
+                      className="animate-spin text-cyber-purple-400 mx-auto mb-2"
+                    />
+                    <p className="text-xs text-cyber-purple-400 font-medium">
+                      Processing...
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Upload
+                      size={20}
+                      className="text-cyber-purple-400/60 mx-auto mb-2 group-hover:text-cyber-purple-400 transition-colors"
+                    />
+                    <p className="text-xs font-medium text-cyber-purple-400">
+                      Upload Resume
+                    </p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-1">
+                      .txt or .pdf
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <hr className="border-[var(--card-border)] mb-5" />
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-semibold flex items-center gap-2">
+              <SlidersHorizontal size={16} /> Filters
+            </h3>
+            {jobs.length > 0 && (
+              <span
+                className="text-xs text-cyber-blue-400 cursor-pointer"
+                onClick={clearFilters}
+              >
+                Clear
+              </span>
+            )}
+          </div>
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                Job Type
+              </h4>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterFullTime}
+                  onChange={(e) => setFilterFullTime(e.target.checked)}
+                  className="rounded bg-[var(--bg-deep)] border-[var(--card-border)] text-cyber-purple-500 focus:ring-cyber-purple-500/0"
+                />
+                Full-time
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterContract}
+                  onChange={(e) => setFilterContract(e.target.checked)}
+                  className="rounded bg-[var(--bg-deep)] border-[var(--card-border)] text-cyber-purple-500 focus:ring-cyber-purple-500/0"
+                />
+                Contract
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterRemote}
+                  onChange={(e) => setFilterRemote(e.target.checked)}
+                  className="rounded bg-[var(--bg-deep)] border-[var(--card-border)] text-cyber-purple-500 focus:ring-cyber-purple-500/0"
+                />
+                Remote
+              </label>
+            </div>
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                AI Match Score
+              </h4>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">
+                <input
+                  type="radio"
+                  name="match"
+                  checked={filterMatchScore === "80"}
+                  onChange={() => setFilterMatchScore("80")}
+                  className="bg-[var(--bg-deep)] border-[var(--card-border)] text-emerald-500"
+                />
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>{" "}
+                  80%+ Match
+                </span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">
+                <input
+                  type="radio"
+                  name="match"
+                  checked={filterMatchScore === "70"}
+                  onChange={() => setFilterMatchScore("70")}
+                  className="bg-[var(--bg-deep)] border-[var(--card-border)] text-amber-500"
+                />
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-amber-500"></div> 70%+
+                  Match
+                </span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text-primary)] cursor-pointer">
+                <input
+                  type="radio"
+                  name="match"
+                  checked={filterMatchScore === "all"}
+                  onChange={() => setFilterMatchScore("all")}
+                  className="bg-[var(--bg-deep)] border-[var(--card-border)] text-[var(--text-secondary)]"
+                />
+                All Jobs
+              </label>
+            </div>
+          </div>
+        </div>
+        { }
+        <div className="flex-1 md:w-[400px] md:flex-none border-r border-[var(--card-border)] flex flex-col bg-[var(--bg-deep)]/50">
+          <div className="p-4 border-b border-[var(--card-border)] flex justify-between items-center bg-[var(--bg-card)]/30 backdrop-blur-sm">
+            <span className="text-sm font-medium text-[var(--text-secondary)]">
+              {isLoading
+                ? "Searching..."
+                : jobs.length > 0
+                  ? `Found ${filteredJobs.length} jobs`
+                  : "Search to start"}
+            </span>
+            <div className="flex items-center gap-1 text-sm text-[var(--text-secondary)] cursor-pointer hover:text-[var(--text-primary)]">
+              Sort: Relevance <ChevronDown size={14} />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            {isLoading ? (
+              Array(5)
+                .fill(0)
+                .map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-32 rounded-xl bg-[var(--card-bg)] border border-[var(--card-border)] animate-pulse shrink-0"
+                  />
+                ))
+            ) : filteredJobs.length > 0 ? (
+              filteredJobs.map((job) => renderJobCard(job))
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] opacity-50 p-8 text-center">
+                <Search size={48} className="mb-4 text-cyber-purple-500/20" />
+                <p className="font-medium text-[var(--text-primary)] mb-1">
+                  No Jobs Found
+                </p>
+                <p className="text-sm">
+                  Try adjusting your search terms or running the AI Aggregation
+                  engine again.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+        { }
+        <div className="flex-[1.5] hidden md:block bg-[var(--bg-card)] p-6 overflow-hidden">
+          {renderJobDetails()}
+        </div>
+      </div>
+      { }
+      <AnimatePresence>
+        {showPreApplyModal && jobToApply && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setShowPreApplyModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[var(--bg-deep)] border border-cyber-purple-500/30 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl shadow-cyber-purple-500/10"
+            >
+              <div className="p-6 border-b border-[var(--card-border)] bg-white/5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-cyber-purple-500/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
+                <h2 className="text-xl font-bold flex items-center gap-2 relative z-10">
+                  <span className="bg-cyber-purple-500/20 p-2 rounded-lg border border-cyber-purple-500/30 text-cyber-purple-400">
+                    <Briefcase size={20} />
+                  </span>
+                  Auto-Apply Configuration
+                </h2>
+              </div>
+              <div className="p-6 space-y-6">
+                <div>
+                  <p className="text-sm text-[var(--text-secondary)] mb-1">
+                    Target Application
+                  </p>
+                  <p className="font-semibold">
+                    {jobToApply.title} at {jobToApply.company}
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                    AI Instructions
+                  </h3>
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-[var(--card-border)] bg-white/5 hover:border-cyber-purple-500/40 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      defaultChecked
+                      className="mt-1 rounded border-white/20 text-cyber-purple-500 focus:ring-0 bg-[var(--bg-deep)]"
+                    />
+                    <div>
+                      <p className="text-sm font-medium">
+                        Generate Custom Cover Letter
+                      </p>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        Gemini will draft a cover letter based on your master
+                        resume and this exact JD.
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-[var(--card-border)] bg-white/5 hover:border-cyber-purple-500/40 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      defaultChecked
+                      className="mt-1 rounded border-white/20 text-cyber-purple-500 focus:ring-0 bg-[var(--bg-deep)]"
+                    />
+                    <div>
+                      <p className="text-sm font-medium">
+                        Auto-Fill Application Questions
+                      </p>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        AI will answer text-based questions using your
+                        background.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm text-amber-200/90 flex gap-2">
+                  <AlertCircle size={18} className="shrink-0 text-amber-400" />
+                  <p>
+                    Playwright will execute this application in a headless
+                    browser. Rate limits apply.
+                  </p>
+                </div>
+              </div>
+              <div className="p-6 border-t border-[var(--card-border)] bg-white/5 flex justify-end gap-3">
+                <CyberButton
+                  variant="ghost"
+                  onClick={() => setShowPreApplyModal(false)}
+                >
+                  Cancel
+                </CyberButton>
+                <CyberButton
+                  variant="primary"
+                  onClick={confirmAutoApply}
+                  className="flex items-center gap-2"
+                >
+                  <Play size={16} fill="currentColor" /> Let AI Apply
+                </CyberButton>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
