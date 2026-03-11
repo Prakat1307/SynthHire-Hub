@@ -121,7 +121,7 @@ COACHING_MODE_PROMPTS = {
     "training": """
     COACHING MODE: TRAINING
     - You MAY provide hints when the candidate is stuck
-    - Show dimension scores after each answer (injected by system)
+    - Do NOT output or explicitly show dimension scores to the candidate; keep your evaluation internal
     - Offer micro-coaching tips when a dimension score drops
     - After partial answers, suggest improvements
     - If candidate asks for help, provide calibrated hints based on their level
