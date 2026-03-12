@@ -39,7 +39,7 @@ if settings.groq_api_key and 'placeholder' not in settings.groq_api_key:
     print(f'Groq Whisper STT initialized')
 print('GROQ KEY LOADED:', bool(os.getenv('GROQ_API_KEY')))
 app = FastAPI(title='SynthHire Speech & AI Pipeline', version='1.0.0')
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "https://synthhire.me", "https://www.synthhire.me"], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 
 class GenerateRequest(BaseModel):
     system_prompt: str

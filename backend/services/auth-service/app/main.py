@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     print(f'{settings.service_name} started on port {settings.service_port}')
     yield
 app = FastAPI(title='SynthHire Auth Service', version='1.0.0', lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=['http://localhost:3000', 'http://localhost:8888'], allow_credentials=False, allow_methods=['*'], allow_headers=['*'])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "https://synthhire.me", "https://www.synthhire.me"], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 
 def get_auth_service(db: Session=Depends(get_db)) -> AuthService:
     return AuthService(db=db, jwt_handler=jwt_handler, redis=redis_client)

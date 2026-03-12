@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     yield
     session_pipelines.clear()
 app = FastAPI(title='SynthHire Emotion Analysis', version='1.0.0', lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "https://synthhire.me", "https://www.synthhire.me"], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 
 class VideoFrameRequest(BaseModel):
     session_id: str

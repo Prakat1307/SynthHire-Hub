@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
     print(f'{settings.service_name} started on port {settings.service_port}')
     yield
 app = FastAPI(title='SynthHire Assessment Engine', version='2.0.0', lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "https://synthhire.me", "https://www.synthhire.me"], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 
 class AssessRequest(BaseModel):
     session_id: str

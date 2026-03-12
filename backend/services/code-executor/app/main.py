@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from .config import settings
 from shared.schemas.assessment import CodeExecutionRequest, CodeExecutionResponse
 app = FastAPI(title='SynthHire Code Executor', version='1.0.0')
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "https://synthhire.me", "https://www.synthhire.me"], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 
 @app.post('/execute', response_model=CodeExecutionResponse)
 async def execute_code(req: CodeExecutionRequest):

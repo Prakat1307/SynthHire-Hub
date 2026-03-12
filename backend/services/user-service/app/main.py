@@ -12,7 +12,7 @@ app = FastAPI(title='User Service', version='1.0.0')
 engine = get_engine(settings.database_url)
 SessionLocal = get_session_factory(engine)
 init_jwt_handler(settings.jwt_public_key_path, algorithm=settings.jwt_algorithm)
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "https://synthhire.me", "https://www.synthhire.me"], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 
 def get_db():
     db = SessionLocal()
