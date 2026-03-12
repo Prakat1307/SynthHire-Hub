@@ -86,7 +86,8 @@ export default function InterviewRoomPage() {
             router.push('/login');
             return;
         }
-        const wsUrl = `ws:
+        const baseWs = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+        const wsUrl = `${baseWs}/ws/sessions/ws/${sessionId}?token=${token}`;
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
         setWsStatus('connecting');
@@ -441,7 +442,7 @@ export default function InterviewRoomPage() {
                                 </span>
                             </div>
                             <div className="code-output-body">
-                                {codeOutput || '
+                                {codeOutput || 'Run code to see output...'}
                             </div>
                         </div>
                     </div>

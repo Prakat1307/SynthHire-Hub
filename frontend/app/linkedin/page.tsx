@@ -184,7 +184,7 @@ export default function LinkedInOptimizerPage() {
                         })}
                     </div>
                     <div className="p-4 border-t border-[var(--card-border)]">
-                        <a href="https:
+                        <a href="https://linkedin.com/in/" target="_blank" rel="noreferrer"
                             className="w-full flex items-center justify-center gap-2 p-3 text-sm font-medium rounded-lg bg-[#0A66C2]/10 text-[#0A66C2] hover:bg-[#0A66C2]/20 transition-colors border border-[#0A66C2]/20">
                             <Linkedin className="w-4 h-4" />Open My LinkedIn
                         </a>
@@ -241,7 +241,7 @@ export default function LinkedInOptimizerPage() {
                                     <>
                                         <div className="flex gap-2">
                                             <input type="text" value={linkedInUrl} onChange={e => setLinkedInUrl(e.target.value)}
-                                                placeholder="https:
+                                                placeholder="https://linkedin.com/in/username"
                                                 className="flex-1 bg-[var(--bg-surface)] border border-[var(--card-border)] rounded-md px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
                                                 onKeyDown={e => e.key === 'Enter' && handleFetchLinkedIn()} />
                                             <button onClick={handleFetchLinkedIn} disabled={isFetching}

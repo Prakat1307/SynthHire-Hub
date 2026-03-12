@@ -2,8 +2,8 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { TokenResponse } from "../types";
 const IS_SERVER = typeof window === "undefined";
 const API_BASE_URL = IS_SERVER
-    ? process.env.SSR_API_URL || "http:
-    : process.env.NEXT_PUBLIC_API_URL || "http:
+    ? process.env.SSR_API_URL || "http://localhost:8000"
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 export const apiClient = axios.create({
     baseURL: API_BASE_URL,
     headers: { "Content-Type": "application/json" },
@@ -93,7 +93,7 @@ export const getServiceUrl = (
     return `/api/services/${service}`;
 };
 export const getWebSocketUrl = (sessionId: string) => {
-    const base = process.env.NEXT_PUBLIC_WS_URL || "ws:
+    const base = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
     return `${base}/ws/sessions/ws/${sessionId}`;
 };
 const api = { apiClient, getServiceUrl, getWebSocketUrl };

@@ -125,7 +125,7 @@ export default function JobsPortal() {
     setSelectedJob(null);
     try {
       const apiBase =
-        process.env.NEXT_PUBLIC_API_URL || "http:
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const response = await fetch(
         `${apiBase}/api/jobs/jobs/search/aggregate`,
         {
@@ -170,7 +170,7 @@ export default function JobsPortal() {
         text = await file.text();
       } else {
         const apiBase =
-          process.env.NEXT_PUBLIC_API_URL || "http:
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const formData = new FormData();
         formData.append("file", file);
         const response = await fetch(
@@ -249,7 +249,7 @@ export default function JobsPortal() {
     }
     try {
       const apiBase =
-        process.env.NEXT_PUBLIC_API_URL || "http:
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const response = await fetch(`${apiBase}/api/jobs/jobs/calculate-match`, {
         method: "POST",
         headers: {
@@ -317,7 +317,7 @@ export default function JobsPortal() {
     );
     try {
       const apiBase =
-        process.env.NEXT_PUBLIC_API_URL || "http:
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const response = await fetch(`${apiBase}/api/jobs/jobs/auto-apply`, {
         method: "POST",
         headers: {
@@ -326,7 +326,7 @@ export default function JobsPortal() {
         },
         body: JSON.stringify({
           job_id: jobToApply.job_id,
-          job_url: jobToApply.apply_url || "https:
+          job_url: jobToApply.apply_url || "https://",
           require_manual_review: false,
         }),
       });

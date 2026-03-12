@@ -21,14 +21,14 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
     { id: 'billing', label: 'Billing & Usage', icon: CreditCard },
 ];
 const MOCK_AVATARS = [
-    "https:
-    "https:
-    "https:
-    "https:
-    "https:
-    "https:
-    "https:
-    "https:
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Jasper",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Mia",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Leah",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Caleb",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Avery",
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Jude"
 ];
 export default function SettingsPage() {
     const authState = useAuthStore() as any;
@@ -183,7 +183,9 @@ export default function SettingsPage() {
                         <p className="text-xs text-[var(--text-secondary)] mb-4 leading-relaxed">Sync repositories and commits for interview code context.</p>
                         <div className="flex items-center justify-between mt-auto">
                             <p className="text-xs font-medium text-cyber-purple-400">@Prakat1307</p>
-                            <a href="https:
+                            <a href="https://github.com/Prakat1307" className="px-3 py-1.5 bg-white/5 hover:bg-emerald-500/10 border border-white/10 hover:border-emerald-500/30 text-xs font-bold rounded-md transition-colors text-[var(--text-primary)] hover:text-emerald-400">
+                                View Profile
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -197,7 +199,7 @@ export default function SettingsPage() {
                     <div>
                         <h3 className="font-bold text-[var(--text-primary)] mb-1">LinkedIn</h3>
                         <p className="text-xs text-[var(--text-secondary)] mb-4 leading-relaxed">Fetch employment history directly without manual entry.</p>
-                        <a href="https:
+                        <a href="https://linkedin.com/" className="w-full text-center py-2 bg-[#0A66C2]/10 hover:bg-[#0A66C2]/20 border border-[#0A66C2]/20 hover:border-[#0A66C2]/40 text-sm font-medium rounded-lg transition-colors text-[#0A66C2]">
                             Visit LinkedIn Profile
                         </a>
                     </div>
@@ -227,7 +229,7 @@ export default function SettingsPage() {
                     <div>
                         <h3 className="font-bold text-[var(--text-primary)] mb-1">X (Twitter)</h3>
                         <p className="text-xs text-[var(--text-secondary)] mb-4 leading-relaxed">Include your public threads in AI background parsing.</p>
-                        <a href="https:
+                        <a href="https://x.com/" className="w-full text-center py-2 bg-[#1DA1F2]/10 hover:bg-[#1DA1F2]/20 border border-[#1DA1F2]/20 hover:border-[#1DA1F2]/40 text-sm font-medium rounded-lg transition-colors text-[#1DA1F2]">
                             Visit X Profile
                         </a>
                     </div>
@@ -242,7 +244,7 @@ export default function SettingsPage() {
                             <h3 className="font-bold text-[var(--text-primary)] mb-1">LeetCode / Programming Profiles</h3>
                             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">Link your competitive programming profiles to calibrate AI difficulty baseline.</p>
                         </div>
-                        <a href="https:
+                        <a href="https://leetcode.com/" className="px-4 py-2 shrink-0 bg-[#FFA116]/10 hover:bg-[#FFA116]/20 border border-[#FFA116]/20 hover:border-[#FFA116]/40 text-sm font-bold rounded-lg transition-colors text-[#FFA116]">
                             View LeetCode
                         </a>
                     </div>
