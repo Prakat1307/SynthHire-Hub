@@ -12,7 +12,7 @@ COPY backend/shared /tmp/shared
 RUN pip install --no-cache-dir /tmp/shared && rm -rf /tmp/shared
 
 COPY ml /app/ml
-RUN cd /app/ml && pip install --default-timeout=1000 -e .
+RUN cd /app/ml && pip install --default-timeout=1000 --extra-index-url https://download.pytorch.org/whl/cpu -e .
 
 COPY backend/services/assessment-engine/requirements.txt .
 RUN sed -i '/shared/d' requirements.txt

@@ -123,9 +123,10 @@ class DeBERTaInterviewScorer(nn.Module):
             
         model = cls(**config)
         
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         state_dict = torch.load(
             os.path.join(model_path, "pytorch_model.bin"),
-            map_location=torch.device("cpu")
+            map_location=device
         )
         model.load_state_dict(state_dict)
         
@@ -136,11 +137,13 @@ class DeBERTaInferenceWrapper:
     def __init__(
         self,
         model_path: str,
-        device: str = "cpu",
+        device: Optional[str] = None,
         max_length: int = 512,
         batch_size: int = 32
     ):
 
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(device)
         self.max_length = max_length
         self.batch_size = batch_size
