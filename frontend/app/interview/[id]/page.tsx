@@ -180,6 +180,32 @@ export default function InterviewRoomPage() {
     }, [messages]);
     const handleWebSocketMessage = useCallback((message: any) => {
         switch (message.type) {
+            case 'session_started': {
+                // AI's opening question when the interview begins
+                const text = message.data?.response_text || message.data;
+                if (text) {
+                    setMessages(prev => [...prev, {
+                        role: 'interviewer', content: text, timestamp: new Date()
+                    }]);
+                    setLastAIMessage(text);
+                    setIsSpeaking(true);
+                    setTimeout(() => setIsSpeaking(false), 3000);
+                }
+                break;
+            }
+            case 'ai_response': {
+                // AI's reply to each candidate message
+                const text = message.data?.response_text || message.data;
+                if (text) {
+                    setMessages(prev => [...prev, {
+                        role: 'interviewer', content: text, timestamp: new Date()
+                    }]);
+                    setLastAIMessage(text);
+                    setIsSpeaking(true);
+                    setTimeout(() => setIsSpeaking(false), 3000);
+                }
+                break;
+            }
             case 'interviewer_text':
                 setMessages(prev => [...prev, {
                     role: 'interviewer', content: message.data, timestamp: new Date()

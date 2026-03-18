@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
     await redis_client.close()
     await mongodb_client.close()
 app = FastAPI(title='SynthHire Session Orchestrator', version='1.0.0', lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "https://synthhire.me", "https://www.synthhire.me"], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "https://synthhire.me", "https://www.synthhire.me"], allow_origin_regex=r"https://.*\.vercel\.app", allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 
 def get_orchestrator(db: Session=Depends(get_db)) -> SessionOrchestrator:
     return SessionOrchestrator(db=db, redis=redis_client, mongodb=mongodb_client, user_client=user_client, speech_client=speech_client, assessment_client=assessment_client, coaching_client=coaching_client, report_client=report_client, code_executor_client=code_executor_client, emotion_client=emotion_client, analytics_client=analytics_client)

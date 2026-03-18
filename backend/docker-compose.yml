@@ -101,6 +101,14 @@ services:
       - DATABASE_URL=postgresql://synthhire:localdev123@postgres:5432/synthhire
       - REDIS_URL=redis://redis:6379/0
       - MONGODB_URL=mongodb://synthhire:localdev123@mongodb:27017/synthhire?authSource=admin
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - USER_SERVICE_URL=http://user-service:8002
+      - SPEECH_PIPELINE_URL=http://speech-pipeline:8004
+      - CODE_EXECUTOR_URL=http://code-executor:8005
+      - ASSESSMENT_ENGINE_URL=http://assessment-engine:8006
+      - EMOTION_ANALYSIS_URL=http://emotion-analysis:8007
+      - REPORT_GENERATOR_URL=http://report-generator:8009
+      - ANALYTICS_SERVICE_URL=http://analytics-service:8010
     volumes:
       - ./keys:/app/keys:ro
     depends_on:

@@ -1,0 +1,14 @@
+{
+  "pythonVersion": "3.11",
+  "extraPaths": [
+    "backend"
+  ],
+  "exclude": [
+    "frontend",
+    "venv",
+    "node_modules",
+    "ml"
+  ],
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none"
+}

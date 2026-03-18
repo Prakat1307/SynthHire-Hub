@@ -43,7 +43,7 @@ class SessionOrchestrator:
         try:
             await self.user_client.post('/subscription/increment-usage', headers={'X-User-Id': user_id})
         except Exception as e:
-            raise ValueError(f'Subscription error: {str(e)}')
+            print(f'[WARNING] Subscription increment failed (non-fatal): {str(e)}')
         final_company_slug = data.custom_company_name
         final_company_id = None
         if not final_company_slug and data.company_id:
