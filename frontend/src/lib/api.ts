@@ -94,7 +94,10 @@ export const getServiceUrl = (
 };
 export const getWebSocketUrl = (sessionId: string) => {
     if (process.env.NEXT_PUBLIC_WS_URL) {
-        return `${process.env.NEXT_PUBLIC_WS_URL}/ws/sessions/ws/${sessionId}`;
+        // NEXT_PUBLIC_WS_URL already contains the nginx gateway prefix, e.g. wss://domain/ws
+        // So append only the backend path — do NOT add /ws/ again.
+        const base = process.env.NEXT_PUBLIC_WS_URL.replace(/\/+$/, ""); // strip trailing slashes
+        return `${base}/sessions/ws/${sessionId}`;
     }
     // Protocol-aware fallback: use wss:// on HTTPS pages to avoid Mixed Content block
     const proto =
@@ -103,6 +106,7 @@ export const getWebSocketUrl = (sessionId: string) => {
             : "ws";
     const host =
         typeof window !== "undefined" ? window.location.host : "localhost:8000";
+    // Fallback builds the full path including the /ws gateway prefix
     return `${proto}://${host}/ws/sessions/ws/${sessionId}`;
 };
 const api = { apiClient, getServiceUrl, getWebSocketUrl };
