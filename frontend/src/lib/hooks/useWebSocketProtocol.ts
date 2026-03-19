@@ -129,7 +129,9 @@ export function useWebSocketProtocol(sessionId: string | null) {
     );
     const connect = useCallback(() => {
         if (!sessionId) return;
-        const url = api.getWebSocketUrl(sessionId);
+        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+        let url = api.getWebSocketUrl(sessionId);
+        if (token) url += `?token=${token}`;
         const ws = new WebSocket(url);
         wsRef.current = ws;
         ws.onopen = () => {
