@@ -93,8 +93,17 @@ export const getServiceUrl = (
     return `/api/services/${service}`;
 };
 export const getWebSocketUrl = (sessionId: string) => {
-    const base = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-    return `${base}/ws/sessions/ws/${sessionId}`;
+    if (process.env.NEXT_PUBLIC_WS_URL) {
+        return `${process.env.NEXT_PUBLIC_WS_URL}/ws/sessions/ws/${sessionId}`;
+    }
+    // Protocol-aware fallback: use wss:// on HTTPS pages to avoid Mixed Content block
+    const proto =
+        typeof window !== "undefined" && window.location.protocol === "https:"
+            ? "wss"
+            : "ws";
+    const host =
+        typeof window !== "undefined" ? window.location.host : "localhost:8000";
+    return `${proto}://${host}/ws/sessions/ws/${sessionId}`;
 };
 const api = { apiClient, getServiceUrl, getWebSocketUrl };
 export default api;

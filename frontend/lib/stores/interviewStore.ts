@@ -139,7 +139,14 @@ export const useInterviewStore = create<InterviewState>((set, get) => ({
         };
         ws.onclose = () => {
             console.log('WebSocket disconnected');
-            set({ status: 'completed', websocket: null });
+            // Only mark as 'completed' if the session was actually active.
+            // A failed connection (never reached 'active') should go back to 'idle'
+            // so the loading screen is shown rather than a broken interview UI.
+            const currentStatus = get().status;
+            set({
+                status: currentStatus === 'active' ? 'completed' : 'idle',
+                websocket: null,
+            });
         };
         set({ status: 'connecting', websocket: ws });
     },
