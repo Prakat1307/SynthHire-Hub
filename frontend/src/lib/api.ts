@@ -1,9 +1,22 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { TokenResponse } from "../types";
 const IS_SERVER = typeof window === "undefined";
-const API_BASE_URL = IS_SERVER
-    ? process.env.SSR_API_URL || "http://localhost:8000"
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+let publicApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+publicApiUrl = publicApiUrl.replace(/\/+$/, "");
+// If the configured URL doesn't already contain /api/services, append it so Nginx routing works reliably
+if (!publicApiUrl.endsWith("/api/services")) {
+    publicApiUrl += "/api/services";
+}
+
+let ssrApiUrl = process.env.SSR_API_URL || "http://localhost:8000";
+ssrApiUrl = ssrApiUrl.replace(/\/+$/, "");
+if (!ssrApiUrl.endsWith("/api/services")) {
+    ssrApiUrl += "/api/services";
+}
+
+const API_BASE_URL = IS_SERVER ? ssrApiUrl : publicApiUrl;
+
 export const apiClient = axios.create({
     baseURL: API_BASE_URL,
     headers: { "Content-Type": "application/json" },
@@ -90,7 +103,8 @@ export const getServiceUrl = (
         | "onboarding"
         | "resume",
 ) => {
-    return `/api/services/${service}`;
+    // Return relative without /api/services/ since the API_BASE_URL will already include it
+    return `/${service}`;
 };
 export const getWebSocketUrl = (sessionId: string) => {
     return `wss://api.synthhire.me/ws/sessions/ws/${sessionId}`;
