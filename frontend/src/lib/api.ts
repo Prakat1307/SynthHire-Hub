@@ -93,8 +93,7 @@ export const getServiceUrl = (
     return `/api/services/${service}`;
 };
 export const getWebSocketUrl = (sessionId: string) => {
-    const base = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-    return `${base}/ws/sessions/ws/${sessionId}`;
+    return `wss://api.synthhire.me/ws/sessions/ws/${sessionId}`;
 };
 const api = { apiClient, getServiceUrl, getWebSocketUrl };
 export default api;
