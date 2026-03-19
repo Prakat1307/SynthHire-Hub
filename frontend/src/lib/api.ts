@@ -93,21 +93,30 @@ export const getServiceUrl = (
     return `/api/services/${service}`;
 };
 export const getWebSocketUrl = (sessionId: string) => {
-    if (process.env.NEXT_PUBLIC_WS_URL) {
-        // NEXT_PUBLIC_WS_URL already contains the nginx gateway prefix, e.g. wss://domain/ws
-        // So append only the backend path — do NOT add /ws/ again.
-        const base = process.env.NEXT_PUBLIC_WS_URL.replace(/\/+$/, ""); // strip trailing slashes
-        return `${base}/sessions/ws/${sessionId}`;
+    let base = process.env.NEXT_PUBLIC_WS_URL || "";
+    
+    if (!base) {
+        // Protocol-aware fallback: use wss:// on HTTPS pages to avoid Mixed Content block
+        const proto =
+            typeof window !== "undefined" && window.location.protocol === "https:"
+                ? "wss"
+                : "ws";
+        const host =
+            typeof window !== "undefined" ? window.location.host : "localhost:8000";
+        base = `${proto}://${host}`;
     }
-    // Protocol-aware fallback: use wss:// on HTTPS pages to avoid Mixed Content block
-    const proto =
-        typeof window !== "undefined" && window.location.protocol === "https:"
-            ? "wss"
-            : "ws";
-    const host =
-        typeof window !== "undefined" ? window.location.host : "localhost:8000";
-    // Fallback builds the full path including the /ws gateway prefix
-    return `${proto}://${host}/ws/sessions/ws/${sessionId}`;
+
+    // Strip trailing slashes
+    base = base.replace(/\/+$/, "");
+    
+    // NGINX explicitly listens for `/ws/` to proxy WebSockets. 
+    // If the base URL doesn't contain it, we MUST append it, otherwise Next.js 404s.
+    if (!base.endsWith("/ws")) {
+        base = `${base}/ws`;
+    }
+
+    // Append the FastAPI route
+    return `${base}/sessions/ws/${sessionId}`;
 };
 const api = { apiClient, getServiceUrl, getWebSocketUrl };
 export default api;

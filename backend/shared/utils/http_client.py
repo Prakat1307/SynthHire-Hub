@@ -4,7 +4,7 @@ import json
 
 class ServiceClient:
 
-    def __init__(self, base_url: str, timeout: int=30):
+    def __init__(self, base_url: str, timeout: int=120):
         self.base_url = base_url.rstrip('/')
         self.timeout = aiohttp.ClientTimeout(total=timeout)
 
